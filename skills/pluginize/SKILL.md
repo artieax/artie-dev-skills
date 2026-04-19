@@ -1,7 +1,7 @@
 ---
 name: pluginize
 description: 'Turn a skills repo into a multi-platform plugin (Claude Code, Codex, Cursor, Gemini, OpenCode). Use when the user wants their skills installable via `/plugin install`, loadable as a Gemini extension, or discoverable via symlink on Codex/OpenCode. Also audits existing plugins for missing manifests or adapters.'
-author: @artieax
+author: '@artieax'
 ---
 
 # pluginize

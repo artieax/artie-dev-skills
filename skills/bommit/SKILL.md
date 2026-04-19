@@ -1,7 +1,7 @@
 ---
 name: bommit
 description: 'Commit the current diff with a clean conventional message — the bot picks the prefix, writes the subject, and runs `git commit`. Use when the user says "bommit", "commit this", or "just commit" without dictating the message. bommit = bot + commit.'
-author: @artieax
+author: '@artieax'
 ---
 
 # bommit
