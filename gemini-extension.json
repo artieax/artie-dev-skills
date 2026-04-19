@@ -1,0 +1,6 @@
+{
+  "name": "artie-dev-skills",
+  "description": "artie's dev-focused agent skills — plugin-ified workflows for building, shipping, and maintaining software",
+  "version": "0.1.0",
+  "contextFileName": "GEMINI.md"
+}
