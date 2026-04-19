@@ -4,13 +4,11 @@
 
 > A minimalist home for general-purpose agent skills — plugin-ready, composable, delightful.
 
-This repo hosts the **`artie-marketplace`** — a shared marketplace that may span multiple artie repos. It currently ships one plugin, `artie-dev-skills`, and is named generically so future plugins (from this repo or others) can register under the same marketplace.
+This is the **`artie-dev-skills`** plugin — dev-focused agent skills, distributed via the [`artie-marketplace`](https://github.com/artieax/artie-marketplace) hub. Other categories (e.g. tax, design) will ship as separate plugins registered under the same marketplace.
 
 ```
 artie-dev-skills  (plugin in the artie-marketplace)
-├── .claude-plugin/
-│   ├── plugin.json          → artie-dev-skills manifest
-│   └── marketplace.json     → artie-marketplace descriptor
+├── .claude-plugin/plugin.json    → artie-dev-skills manifest
 ├── .cursor-plugin/plugin.json
 ├── .codex/INSTALL.md
 ├── .opencode/INSTALL.md
@@ -20,7 +18,8 @@ artie-dev-skills  (plugin in the artie-marketplace)
 ├── GEMINI.md             → mirrors AGENTS.md
 ├── README.md             ← you are here
 └── skills/
-    └── pluginize/
+    ├── pluginize/
+    └── bommit/
 ```
 
 ---
@@ -30,11 +29,11 @@ artie-dev-skills  (plugin in the artie-marketplace)
 ### Claude Code
 
 ```bash
-/plugin marketplace add artieax/artie-dev-skills
+/plugin marketplace add artieax/artie-marketplace
 /plugin install artie-dev-skills@artie-marketplace
 ```
 
-Future artie plugins will register under the same `artie-marketplace` — only the plugin name after `/plugin install` changes.
+The marketplace lives at [`artieax/artie-marketplace`](https://github.com/artieax/artie-marketplace); other artie plugins register there too — only the plugin name after `/plugin install` changes.
 
 ### Cursor
 
@@ -51,16 +50,6 @@ The repo ships `gemini-extension.json` + `GEMINI.md`. Point your Gemini setup at
 ### OpenCode
 
 See [`.opencode/INSTALL.md`](./.opencode/INSTALL.md).
-
----
-
-## Plugins in this marketplace
-
-| Plugin | Skills | Focus |
-|--------|--------|-------|
-| **artie-dev-skills** | `pluginize`, `bommit` | Dev workflows — turning work into distributable plugins |
-
-More plugins may split out from this repo later.
 
 ---
 

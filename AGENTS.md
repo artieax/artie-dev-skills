@@ -1,12 +1,12 @@
 ## Marketplace
 
-This repo hosts `artie-marketplace` — a shared marketplace intended to span multiple artie repos. It currently ships one plugin, `artie-dev-skills`.
+This is the `artie-dev-skills` plugin. The marketplace it ships through, `artie-marketplace`, lives at [`artieax/artie-marketplace`](https://github.com/artieax/artie-marketplace) and aggregates plugins from multiple artie repos.
 
-Install pattern (future plugins register under the same marketplace):
+Install:
 
 ```
-/plugin marketplace add artieax/artie-dev-skills
-/plugin install <plugin-name>@artie-marketplace
+/plugin marketplace add artieax/artie-marketplace
+/plugin install artie-dev-skills@artie-marketplace
 ```
 
 ## Skills in `artie-dev-skills`
