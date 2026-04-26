@@ -1,0 +1,68 @@
+name: skill-builder smoke
+
+# Path triggers cover anything that can break the skill-builder contract:
+#   - skills/skill-builder/**             — the skill itself
+#   - skills/pluginize/**                 — the only sibling skill referenced
+#                                           from skill-builder's docs / deps
+#   - references/dependency-graph.md      — sklock-fallback graph that
+#                                           collect_evals.py / docs read
+#   - AGENTS.md, README.md                — top-level skill index that lists
+#                                           skill-builder; smoke catches stale
+#                                           cross-links before merge
+#   - the workflow itself                 — so changes to the smoke job
+#                                           validate themselves
+on:
+  pull_request:
+    paths:
+      - 'skills/skill-builder/**'
+      - 'skills/pluginize/**'
+      - 'references/dependency-graph.md'
+      - 'AGENTS.md'
+      - 'README.md'
+      - '.github/workflows/skill-builder-smoke.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'skills/skill-builder/**'
+      - 'skills/pluginize/**'
+      - 'references/dependency-graph.md'
+      - 'AGENTS.md'
+      - 'README.md'
+      - '.github/workflows/skill-builder-smoke.yml'
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: py_compile every script
+        run: |
+          python -m py_compile skills/skill-builder/scripts/*.py
+
+      - name: prompts.py — list available prompts
+        run: |
+          python skills/skill-builder/scripts/prompts.py
+
+      - name: skill-builder smoke test
+        run: |
+          python skills/skill-builder/scripts/smoke_test.py
+
+      # py_compile catches syntax errors but does not exercise optuna
+      # imports, argparse wiring, or the PEP 723 `# /// script` metadata
+      # that `uv run` consumes. `--help` is enough to lock the runtime
+      # path without spending any optimizer trials.
+      - name: Install uv (for tune_thresholds runtime smoke)
+        uses: astral-sh/setup-uv@v5
+
+      - name: tune_thresholds.py — runtime smoke (uv run --help)
+        run: |
+          uv run --no-project --quiet \
+            skills/skill-builder/scripts/tune_thresholds.py --help

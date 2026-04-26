@@ -1,0 +1,15 @@
+{
+  "version": "v1",
+  "date": "2026-04-25",
+  "scores": {
+    "trigger_precision": 6,
+    "workflow_coverage": 7,
+    "output_clarity": 6,
+    "red_flag_completeness": 7,
+    "dep_accuracy": 7
+  },
+  "total": 33,
+  "worst_metric": "trigger_precision",
+  "top_improvement": "trigger_precision: 'Create a new skill' is too broad — add Do not trigger boundary against agent-config-manager for private/global-skills repos",
+  "notes": "initial self-eval"
+}

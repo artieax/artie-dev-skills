@@ -1,0 +1,20 @@
+{
+  "version": "v4",
+  "date": "2026-04-26",
+  "pipeline": "manual_rubric (score.md applied to v4/skill.md by maintainer; no claude -p invocation)",
+  "scores": {
+    "trigger_precision": 8,
+    "workflow_coverage": 8,
+    "output_clarity": 7,
+    "red_flag_completeness": 9,
+    "dep_accuracy": 8
+  },
+  "total": 40,
+  "worst_metric": "output_clarity",
+  "top_improvement": "output_clarity: SKILL.md `## Output` section currently delegates entirely to `references/output-templates.md` with one link; embed at least one literal report-shape example block inline so partial-phase invocations are obvious without following the link.",
+  "open_questions": [
+    "trigger_precision capped at 8 because `Do not trigger` no longer names an adjacent skill explicitly (v3 used to call out `agent-config-manager`); should v4 re-introduce a `do not trigger -> use <skill>` line, e.g. against `pluginize` per the soft edge already declared in references/dependency-graph.md?",
+    "workflow_coverage capped at 8 because per-phase procedures are delegated to references; intentional design choice (orchestrator pattern) but loses the inline-checkpoint signal the rubric rewards"
+  ],
+  "notes": "First scored eval for v4. Reuses the same anchored rubric from prompts/score.md that v3 was scored against; differences from v3 reflect the references-orchestrator restructure (procedures delegated to references) plus added red-flag XSS rule and dependency-graph.md shipping. Total 40/50 matches v3's total, so improvement vs v3 is 0% — under the threshold semantics in references/iteration.md this is a plateau, but the absolute weighted score satisfies the min_quality (>=7) gate per metric except where output_clarity sits at the lower end of the 6-8 band (still passes the >=7 strict gate). pipeline=\"manual_rubric\" makes the scoring path explicit so a future automated `claude -p` re-score can override this row without ambiguity."
+}

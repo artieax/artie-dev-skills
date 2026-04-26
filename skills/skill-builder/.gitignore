@@ -1,0 +1,45 @@
+# Ephemeral / machine-local — these are generated artifacts.
+#
+# Why ignore the whole data/ JSON surface (vs. checking it in):
+#   - optimized_prompt.json embeds whole SKILL.md snapshots that drift from
+#     the live skill within a few iterations; a stale checked-in copy
+#     teaches the optimizer to reproduce yesterday's mistakes (and worse,
+#     the schema has expanded over time, so old copies are silently
+#     incompatible with the current loader).
+#   - tuned_thresholds.json is an Optuna fit on whatever eval history this
+#     machine happens to have. With < ~5 skill sequences it is effectively
+#     a noise sample; checking it in implies "global default" when it is
+#     not.
+#   - trigger_eval_set.json is regenerated cheaply on demand; the
+#     committed copy goes stale the moment the description changes.
+#
+# Producers regenerate these on demand:
+#   python scripts/collect_evals.py
+#   python scripts/optimize.py
+#   python scripts/optimize_description.py
+#   uv run scripts/tune_thresholds.py
+data/*.jsonl
+data/*.json
+
+review/
+
+# projects/<name>/v<N>/ — versioned eval metadata.
+#
+# We INTENTIONALLY commit eval.json / input.md / changes.md / skill.md so:
+#   - data/evals.jsonl is genuinely regenerable from `collect_evals.py`
+#     across machines and CI (the docs in references/evals/index.md and
+#     scaffold/atoms/versioned-projects.md both depend on this);
+#   - `collect_evals.py`'s git-history fallback for the SKILL.md snapshot
+#     can actually find the eval.json commit;
+#   - rollbacks and version-to-version comparisons reviewers do in PRs
+#     work without out-of-band sharing.
+#
+# We ignore everything else under projects/ — generated outputs, sandbox
+# runs, scratch dirs — because those are heavy and per-machine.
+projects/*/v*/output/
+projects/*/v*/sandbox/
+projects/*/runs/
+projects/*/sandbox/
+
+__pycache__/
+*.py[cod]

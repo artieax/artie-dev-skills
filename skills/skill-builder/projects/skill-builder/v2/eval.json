@@ -1,0 +1,28 @@
+{
+  "version": "v2",
+  "date": "2026-04-25",
+  "pipeline": "quick + executor + collision-scan + adversarial",
+  "scores": {
+    "trigger_precision": 6,
+    "workflow_coverage": 5,
+    "output_clarity": 5,
+    "red_flag_completeness": 5,
+    "dep_accuracy": 6
+  },
+  "total": 27,
+  "worst_metric": "workflow_coverage",
+  "top_improvement": "Phase 4 still describes old static scoring — pipeline selection guide missing",
+  "open_questions": [
+    "Phase 2: Pattern A–D not described in SKILL.md, requires opening scaffold.md",
+    "Phase 4: SKILL.md says 'pass to Claude' but evals.md has pipeline system — which to follow?",
+    "Phase 5: grep contains literal '<other-skill>' placeholder",
+    "Phase 7: cron JSON has no target file path"
+  ],
+  "critical_gate": "not runnable — no Requirements section",
+  "collisions": ["'Create a new skill' overlaps with agent-config-manager (high severity)"],
+  "false_positives": [
+    "'Update CLAUDE.md' could trigger incorrectly",
+    "'Create a new component' matches surface pattern"
+  ],
+  "notes": "self-eval run using multi-pipeline approach"
+}
