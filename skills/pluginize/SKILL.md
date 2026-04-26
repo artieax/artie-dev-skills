@@ -18,7 +18,7 @@ Plain skills repos (just `AGENTS.md` + `skills/`) only work as a raw `git clone`
 - "Audit my plugin — what's missing?"
 - "Why won't `/plugin install` find my repo?"
 
-**Do not trigger** when the user is writing a single SKILL.md — route them to their `skill-creator`. This skill is about the *repo-level plugin envelope*, not individual skill authoring.
+**Do not trigger** when the user is writing a single SKILL.md — route them to their `skill-builder`. This skill is about the *repo-level plugin envelope*, not individual skill authoring.
 
 ## Platform matrix
 

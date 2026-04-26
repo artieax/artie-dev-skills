@@ -59,6 +59,7 @@ See [`.opencode/INSTALL.md`](./.opencode/INSTALL.md).
 |-------|---------|
 | **pluginize** | Turn a skills repo into a multi-platform plugin |
 | **bommit** | Commit the current diff with a clean conventional message |
+| **skill-builder** | Create, iterate, evaluate, and improve skills — scaffold, worktree iteration, evals, auto split, auto dependency registration, periodic improvement |
 
 > More skills coming soon.
 

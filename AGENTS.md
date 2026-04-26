@@ -15,5 +15,6 @@ Install:
 |-------|---------|
 | `pluginize` | Turn a skills repo into a multi-platform plugin |
 | `bommit` | Commit the current diff with a clean conventional message |
+| `skill-builder` | Create, iterate, evaluate, and improve skills — scaffold, worktree iteration, metrics/evals, auto sub-skill split, auto dependency registration, periodic improvement |
 
 See `skills/*` for details.
