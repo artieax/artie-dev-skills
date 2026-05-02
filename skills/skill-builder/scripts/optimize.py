@@ -101,6 +101,13 @@ def _score_from_dict(scores_dict: dict) -> float:
     return total / 50.0
 
 
+def _median(values: list[float]) -> float:
+    s = sorted(values)
+    n = len(s)
+    mid = n // 2
+    return (s[mid] + s[mid - 1]) / 2.0 if n % 2 == 0 else s[mid]
+
+
 # ---------------------------------------------------------------------------
 # Data loading
 # ---------------------------------------------------------------------------
@@ -248,6 +255,7 @@ def phase_prepare(
     max_demos: int,
     trials: int,
     seed: Optional[int],
+    score_rounds: int = 1,
 ) -> None:
     print(f"Loading training data from {data_path} ...")
     trainset = load_trainset(data_path)
@@ -290,11 +298,19 @@ def phase_prepare(
         "seed": seed,
         "max_demos": max_demos,
         "trials": trials,
+        "score_rounds": score_rounds,
         "trainset": trainset,
         "candidates": [list(c) for c in candidates],
         "pairs": pairs,
     }
     save_state(_WORK_STATE, state)
+
+    # Clear stale artifacts from any previous run so later phases never read old results
+    for _stale_dir in (_SCAFFOLD_DIR, _SCORE_DIR):
+        if os.path.isdir(_stale_dir):
+            for _f in glob.glob(os.path.join(_stale_dir, "*")):
+                os.remove(_f)
+        os.makedirs(_stale_dir, exist_ok=True)
 
     print(f"\nPrepared {len(candidates)} candidate set(s), {len(pairs)} scaffold task(s).")
     print(f"Seed: {seed}")
@@ -344,25 +360,23 @@ def phase_emit_scores() -> None:
         sys.exit(1)
 
     pairs = state["pairs"]
-    schema = (
-        '{"trigger_precision": N, "workflow_coverage": N, '
-        '"output_clarity": N, "red_flag_completeness": N, "dep_accuracy": N}'
-    )
+    score_rounds = state.get("score_rounds", 1)
     n = 0
     missing_scaffolds = 0
 
     for pair in pairs:
         scaffold_path = os.path.join(_SCAFFOLD_DIR, f"{pair['pair_id']}.md")
-        score_path = os.path.join(_SCORE_DIR, f"{pair['pair_id']}.json")
-        if result_exists(score_path):
-            continue  # already scored
         if not result_exists(scaffold_path):
             missing_scaffolds += 1
             continue
         scaffold = read_result(scaffold_path)
         prompt = _score_prompt(scaffold)
-        call_emit(prompt, out=score_path, json_mode=True, id=f"score_{pair['pair_id']}")
-        n += 1
+        for r in range(score_rounds):
+            score_path = os.path.join(_SCORE_DIR, f"{pair['pair_id']}_r{r}.json")
+            if result_exists(score_path):
+                continue
+            call_emit(prompt, out=score_path, json_mode=True, id=f"score_{pair['pair_id']}_r{r}")
+            n += 1
 
     if missing_scaffolds:
         print(f"[warn] {missing_scaffolds} scaffold file(s) missing — run --emit-scaffolds first.")
@@ -386,21 +400,25 @@ def phase_finalize(output_path: str) -> None:
     candidates = state["candidates"]
     pairs = state["pairs"]
 
-    # Aggregate scores per candidate
+    score_rounds = state.get("score_rounds", 1)
+    # Aggregate scores per candidate, taking median across scoring rounds
     candidate_scores: dict[int, list[float]] = {i: [] for i in range(len(candidates))}
     missing = 0
     for pair in pairs:
-        score_path = os.path.join(_SCORE_DIR, f"{pair['pair_id']}.json")
-        if not result_exists(score_path):
-            missing += 1
-            continue
-        try:
-            scores_dict = read_json(score_path)
-        except (ValueError, json.JSONDecodeError) as e:
-            print(f"  [warn] could not parse {score_path}: {e}")
-            continue
-        s = _score_from_dict(scores_dict)
-        candidate_scores[pair["candidate_idx"]].append(s)
+        round_scores: list[float] = []
+        for r in range(score_rounds):
+            score_path = os.path.join(_SCORE_DIR, f"{pair['pair_id']}_r{r}.json")
+            if not result_exists(score_path):
+                missing += 1
+                continue
+            try:
+                scores_dict = read_json(score_path)
+            except (ValueError, json.JSONDecodeError) as e:
+                print(f"  [warn] could not parse {score_path}: {e}")
+                continue
+            round_scores.append(_score_from_dict(scores_dict))
+        if round_scores:
+            candidate_scores[pair["candidate_idx"]].append(_median(round_scores))
 
     if missing:
         print(f"[warn] {missing} score file(s) missing — run --emit-scores first.")
@@ -497,6 +515,8 @@ def main() -> None:
     parser.add_argument("--max-demos", type=int, default=3)
     parser.add_argument("--trials", type=int, default=8)
     parser.add_argument("--seed", type=int, default=None)
+    parser.add_argument("--score-rounds", type=int, default=1,
+                        help="Score each scaffold N times and take the median (default: 1)")
     parser.add_argument("--description", default="", help="For --generate")
     parser.add_argument("--requirements", default="", help="For --generate")
     args = parser.parse_args()
@@ -513,7 +533,7 @@ def main() -> None:
         return
 
     if args.prepare:
-        phase_prepare(data_path, args.max_demos, args.trials, args.seed)
+        phase_prepare(data_path, args.max_demos, args.trials, args.seed, args.score_rounds)
     elif args.emit_scaffolds:
         phase_emit_scaffolds()
     elif args.emit_scores:

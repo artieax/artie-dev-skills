@@ -28,7 +28,6 @@ Phases 1 and 2 can run in parallel (neither depends on the other).
 
 Usage:
     cd skills/<name>/
-    python ../skill-builder/scripts/optimize_description.py --skill-root .
 
     python optimize_description.py --skill-root . --emit-eval-set
     # → host processes __LLM_DELEGATE__ (eval set gen)
@@ -47,6 +46,8 @@ Stdlib only. No claude CLI or API key needed.
 from __future__ import annotations
 
 import argparse
+import glob
+import hashlib
 import json
 import os
 import re
@@ -55,7 +56,7 @@ from typing import Optional
 
 sys.path.insert(0, os.path.dirname(__file__))
 import prompts
-from agent import call_emit, read_json, result_exists, save_state, load_state
+from agent import call_emit, read_json, result_exists
 
 
 _WORK_DIR = "tmp/desc_opt"
@@ -71,6 +72,8 @@ _UNSUPPORTED_DESC_MARKERS = {"|", ">", "|-", ">-", "|+", ">+"}
 
 # Minimum queries required for a cached eval set to be considered usable.
 _MIN_USABLE_QUERIES = 10
+
+_RUN_META = "tmp/desc_opt/run_meta.json"
 
 
 # ---------------------------------------------------------------------------
@@ -163,19 +166,80 @@ def phase_emit_eval_set(skill_md: str, eval_set_path: str) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Run-identity helpers (fingerprint-based stale-artifact invalidation)
+# ---------------------------------------------------------------------------
+
+def _compute_run_fingerprint(skill_md_text: str, n_variants: int) -> str:
+    digest = hashlib.md5(skill_md_text.encode()).hexdigest()
+    return f"{digest}:{n_variants}"
+
+
+def _load_run_meta() -> dict:
+    if not os.path.exists(_RUN_META):
+        return {}
+    try:
+        with open(_RUN_META, encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def _save_run_meta(meta: dict) -> None:
+    os.makedirs(os.path.dirname(_RUN_META), exist_ok=True)
+    with open(_RUN_META, "w", encoding="utf-8") as f:
+        json.dump(meta, f, indent=2)
+
+
+def _build_error_summary(eval_set_path: str) -> str:
+    """Return FP/FN summary from existing current-desc judge files, or a no-data message."""
+    queries = _load_cached_eval_set(eval_set_path)
+    if queries is None:
+        return "No error information yet — generate initial variants."
+    if not any(
+        result_exists(os.path.join(_JUDGE_DIR, f"current_{q_idx}.json"))
+        for q_idx in range(len(queries))
+    ):
+        return "No error information yet — generate initial variants."
+    score = _accuracy("current", queries)
+    parts = [f"Current description accuracy: {score['accuracy']:.0%} ({score['n']} queries scored)."]
+    if score["false_positives"]:
+        parts.append(f"False positives (triggered when should not): {score['false_positives'][:5]}")
+    if score["false_negatives"]:
+        parts.append(f"False negatives (should trigger but did not): {score['false_negatives'][:5]}")
+    if not score["false_positives"] and not score["false_negatives"]:
+        parts.append("No errors found — variants should refine clarity and precision.")
+    return "\n".join(parts)
+
+
+# ---------------------------------------------------------------------------
 # Phase 2: emit variant generation directive
 # ---------------------------------------------------------------------------
 
-def phase_emit_variants(skill_md: str, current_desc: str, n_variants: int) -> None:
+def phase_emit_variants(skill_md: str, current_desc: str, n_variants: int, eval_set_path: str) -> None:
+    fingerprint = _compute_run_fingerprint(skill_md, n_variants)
+    meta = _load_run_meta()
+
+    # Invalidate stale artifacts if SKILL.md content or variant count changed
+    if result_exists(_VARIANTS_OUT) and meta.get("variants_fp") != fingerprint:
+        os.remove(_VARIANTS_OUT)
+        for stale in glob.glob(os.path.join(_JUDGE_DIR, "*.json")):
+            os.remove(stale)
+        print("[info] Inputs changed — cleared stale variants and judge files.")
+
     if result_exists(_VARIANTS_OUT):
         print(f"Variants already generated at {_VARIANTS_OUT} — skipping emit.")
         return
-    error_summary = "No error information yet — generate initial variants."
+
+    error_summary = _build_error_summary(eval_set_path)
     prompt = prompts.render(
         "description-variant", skill_md=skill_md, n=n_variants, eval_summary=error_summary
     )
     os.makedirs(os.path.dirname(_VARIANTS_OUT), exist_ok=True)
     call_emit(prompt, out=_VARIANTS_OUT, json_mode=True, id="variant_gen")
+
+    meta["variants_fp"] = fingerprint
+    _save_run_meta(meta)
+
     print(f"Emitted variant-gen directive → {_VARIANTS_OUT}")
     print("Process __LLM_DELEGATE__ lines, then run --emit-judgments.")
 
@@ -373,7 +437,7 @@ def main() -> None:
     if args.emit_eval_set:
         phase_emit_eval_set(skill_md_text, eval_set_path)
     elif args.emit_variants:
-        phase_emit_variants(skill_md_text, current_desc, args.variants)
+        phase_emit_variants(skill_md_text, current_desc, args.variants, eval_set_path)
     elif args.emit_judgments:
         phase_emit_judgments(eval_set_path, current_desc)
     elif args.finalize:
