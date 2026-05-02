@@ -15,6 +15,9 @@ TMP = Path("tmp/tutorial")
 
 
 def delegate(prompt: str, out: Path) -> None:
+    # Intentional inline implementation — this tutorial demonstrates the raw
+    # wire protocol in ~2 lines. Real scripts should copy scripts/delegate.py
+    # (or import agent.call_emit) rather than re-implementing this.
     directive = {"prompt": prompt, "out": str(out)}
     print(f"__LLM_DELEGATE__: {json.dumps(directive)}", flush=True)
 

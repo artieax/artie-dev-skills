@@ -1,5 +1,5 @@
 """
-delegate.py — stdout-delegate helper for skill scripts (Mode D)
+delegate.py — stdout-delegate helper for skill scripts (Mode D, copyable)
 
 Scripts call llm_invoke() to emit __LLM_DELEGATE__ directives.
 The host agent (Claude Code, or any Mode-D-aware provider) reads the script's
@@ -7,6 +7,12 @@ stdout and executes each directive: calls the LLM, writes the result to `out`.
 
 Copy this file into your skill's scripts/ directory, or inline the single
 print statement — no external dependencies needed.
+
+Design note: this file is a lightweight copy-and-paste helper. The canonical
+implementation and full read-back utilities (read_result, read_json, state
+helpers) live in scripts/agent.py, which is the SSOT for the wire format.
+If the __LLM_DELEGATE__ format ever changes, update agent.py::call_emit()
+first, then mirror the change here.
 
 Usage:
     from delegate import llm_invoke

@@ -1,5 +1,10 @@
 """
-agent.py — Mode D stdout-delegate backend for skill scripts
+agent.py — Mode D stdout-delegate backend for skill scripts (SSOT)
+
+This is the canonical implementation of the stdout-delegate protocol.
+`scripts/delegate.py` is a trimmed copy intended to be pasted into user
+skill scripts; if the emit format ever changes, update call_emit() here
+first, then mirror the change in delegate.py::llm_invoke().
 
 Scripts import call_emit / read_result / read_json and use a two-phase
 pattern instead of the old Mode A subprocess approach:
@@ -81,8 +86,10 @@ def read_result(out: str) -> str:
 def read_json(out: str) -> dict[str, Any]:
     """Read and parse the JSON LLM response written by the host to `out`.
 
-    Extracts the first balanced `{...}` object from the file, so it works
-    even if the host wraps the JSON in prose.
+    Wire contract: lenient — extracts the first balanced `{...}` object so
+    it works even when the host wraps the JSON in prose (e.g. markdown code
+    fences). This is intentional and official; callers relying on strict
+    JSON-only output should validate the returned dict themselves.
     """
     text = read_result(out)
     obj = _extract_json_object(text)

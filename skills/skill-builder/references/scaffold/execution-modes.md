@@ -4,7 +4,7 @@ The same scaffold prompts (`prompts/scaffold-system.md`, `prompts/scaffold-user.
 
 Eval pipelines that invoke an LLM (`independent-evaluator`, `static-score`, `adversarial`, `hold-out`) reuse the same three modes; for eval-specific “best for” notes see [`../evals/atomic-builder.md`](../evals/atomic-builder.md#execution-modes).
 
-Mode D (stdout-delegate) is an orthogonal extension: a script can signal the host LLM via stdout rather than calling the LLM itself. It composes with any of A / B / C — see [`atoms/stdout-delegate.md`](atoms/stdout-delegate.md).
+Mode D (stdout-delegate) is an alternative call mechanism at the script level: instead of calling the LLM directly (subprocess / API), the script emits `__LLM_DELEGATE__` directives that the host processes after the script exits. A SKILL.md workflow that uses Mode C / B / A for its main scaffold calls can still use Mode D inside individual helper scripts — the modes operate at different layers. Within a single script, choose either Mode D or direct LLM calls (Mode A subprocess); mixing both in one script is redundant. See [`atoms/stdout-delegate.md`](atoms/stdout-delegate.md).
 
 ---
 

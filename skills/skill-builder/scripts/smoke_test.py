@@ -1007,13 +1007,48 @@ def check_agent_delegate(skill_root: Path) -> list[str]:
     if payload.get("json") is not True:
         failures.append(f"payload['json'] should be True, got {payload.get('json')!r}")
 
-    # _extract_json_object round-trip
+    # _extract_json_object round-trip — basic
     sample = '{"ok": true, "score": 42}'
     parsed = agent._extract_json_object(sample)
     if parsed != {"ok": True, "score": 42}:
         failures.append(f"_extract_json_object({sample!r}) returned {parsed!r}")
     if agent._extract_json_object("no json here") is not None:
         failures.append("_extract_json_object should return None when no JSON found")
+
+    # Edge case: JSON wrapped in markdown code fences (common host prose wrapper)
+    fenced = '```json\n{"label": "feat"}\n```'
+    parsed_fenced = agent._extract_json_object(fenced)
+    if parsed_fenced != {"label": "feat"}:
+        failures.append(
+            f"_extract_json_object should extract JSON from markdown fence, "
+            f"got {parsed_fenced!r}"
+        )
+
+    # Edge case: nested array inside object
+    nested = '{"items": [1, 2, 3], "count": 3}'
+    parsed_nested = agent._extract_json_object(nested)
+    if parsed_nested != {"items": [1, 2, 3], "count": 3}:
+        failures.append(
+            f"_extract_json_object failed on nested array: got {parsed_nested!r}"
+        )
+
+    # Edge case: escaped double-quote inside string value
+    escaped = r'{"key": "value with \"quotes\" inside"}'
+    parsed_escaped = agent._extract_json_object(escaped)
+    if parsed_escaped != {"key": 'value with "quotes" inside'}:
+        failures.append(
+            f"_extract_json_object failed on escaped quote in string: "
+            f"got {parsed_escaped!r}"
+        )
+
+    # Edge case: prose before and after the JSON object
+    prose = 'Here is the result: {"status": "ok"} — done.'
+    parsed_prose = agent._extract_json_object(prose)
+    if parsed_prose != {"status": "ok"}:
+        failures.append(
+            f"_extract_json_object failed to extract JSON from surrounding prose: "
+            f"got {parsed_prose!r}"
+        )
 
     # result_exists / load_state / save_state round-trip (no filesystem side-effects
     # beyond a single tempdir)

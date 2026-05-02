@@ -8,7 +8,7 @@ Lets a script emit LLM instructions via stdout. The host agent reads the output,
 - The script environment may not have an Anthropic API key or `claude` on PATH
 - You want to keep the script dependency-free while still using the host's LLM capability
 
-Do not use when the script already uses `agent.py` (Mode A) — they are alternatives, not complements.
+Do not use alongside `agent.py`'s `call_emit()` in the same script — both emit the same directives; pick one. `delegate.py` is the copy-and-paste lightweight helper; `agent.py` adds `read_result` / `read_json` / state helpers for two-phase scripts.
 
 ## Protocol
 
@@ -23,12 +23,19 @@ JSON fields:
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `prompt` | string | yes | Instruction for the LLM |
-| `out` | string | no | File path to write the LLM response into |
+| `out` | string | no | File path to write the LLM response into. If omitted and `id` is also absent, the host discards the result (fire-and-forget). |
 | `id` | string | no | Label so the workflow step can reference the result by name |
 | `system` | string | no | System prompt to prepend |
-| `json` | boolean | no | `true` → ask the LLM for JSON output |
+| `json` | boolean | no | `true` → ask the LLM for JSON output; consumers SHOULD extract the first `{…}` object to handle hosts that wrap the response in prose |
 
 All other stdout lines are treated as normal script output and are not processed.
+
+### Protocol rules
+
+- **Processing order** — directives are processed in stdout appearance order. They are not streamed; all output is collected after the script exits, then each directive is handled sequentially.
+- **Duplicate `id`** — two directives with the same `id` in one run is invalid. Hosts SHOULD treat it as an error or warn and skip the duplicate.
+- **Duplicate `out`** — two directives targeting the same `out` path in one run is invalid. If a host must resolve it, last-write-wins; prefer splitting into separate workflow steps instead.
+- **`out` and `id` both absent** — the host has no place to write the result and no name to reference it by; the directive is fire-and-forget (result discarded).
 
 ### Minimal example
 
