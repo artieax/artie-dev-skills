@@ -32,6 +32,7 @@ Start here:
 |---|---|---|
 | [`references-dir`](atoms/references-dir.md) | `references/` for delegated docs + `eval-log.jsonl` | workflow > 40 lines, or eval tracking needed |
 | [`scripts-dir`](atoms/scripts-dir.md) | `scripts/` for encapsulated shell/file ops | > 3 chained commands or reusable logic |
+| [`stdout-delegate`](atoms/stdout-delegate.md) | Scripts emit `__LLM_DELEGATE__:` lines; host executes LLM calls — no API key or `claude` CLI needed inside the script | scripts need selective LLM help but can't import a SDK |
 | [`prompts-dir`](atoms/prompts-dir.md) | `prompts/` for reusable LLM prompts loaded by scripts | scripts make 2+ LLM calls, or prompts are large enough to obscure call-site code |
 | [`atomic-builder`](atoms/atomic-builder.md) | EXTRACT → PICK → BUILD pipeline owned by this skill | skill's core job is generating artifacts from a catalog of parts |
 | [`orchestrator`](atoms/orchestrator.md) | SKILL.md that calls top-level child skills in fixed order | multi-phase pipeline with independent triggers |

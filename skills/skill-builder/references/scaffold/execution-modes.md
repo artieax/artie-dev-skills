@@ -1,8 +1,10 @@
-# Scaffold execution modes (A / B / C)
+# Scaffold execution modes (A / B / C / D)
 
 The same scaffold prompts (`prompts/scaffold-system.md`, `prompts/scaffold-user.md`, optionally `prompts/scaffold-fewshot-item.md`) drive three interchangeable ways to run **BUILD**. Pick the one your host supports — the **prompt files are the SSOT**; only the call layer changes.
 
 Eval pipelines that invoke an LLM (`independent-evaluator`, `static-score`, `adversarial`, `hold-out`) reuse the same three modes; for eval-specific “best for” notes see [`../evals/atomic-builder.md`](../evals/atomic-builder.md#execution-modes).
+
+Mode D (stdout-delegate) is an alternative call mechanism at the script level: instead of calling the LLM directly (subprocess / API), the script emits `__LLM_DELEGATE__` directives that the host processes after the script exits. A SKILL.md workflow that uses Mode C / B / A for its main scaffold calls can still use Mode D inside individual helper scripts — the modes operate at different layers. Within a single script, choose either Mode D or direct LLM calls (Mode A subprocess); mixing both in one script is redundant. See [`atoms/stdout-delegate.md`](atoms/stdout-delegate.md).
 
 ---
 
@@ -13,8 +15,9 @@ Eval pipelines that invoke an LLM (`independent-evaluator`, `static-score`, `adv
 | **C. inline** (default) | The host LLM reads `prompts/scaffold-system.md` + renders `prompts/scaffold-user.md`, then answers itself. No script, no CLI, no subprocess. | one-shot scaffold; portable across hosts | every agent (Claude Code, Codex, Cursor, Gemini, OpenCode) |
 | **B. Task subagent** | Host LLM spawns a context-free subagent via its Task / subagent primitive with `run_in_background=true`. The subagent gets the same rendered prompts; result returns to parent on completion. | long pipelines (BootstrapFewShot, evals); want non-blocking; want fresh executor semantics for free | Claude Code (Task tool), Anthropic Agent SDK |
 | **A. subprocess** | `python scripts/optimize.py` calls `claude -p` via `scripts/agent.py`. Hermetic, scriptable, parallelisable with `&`. | CI / cron / batch optimization with > 1 trial | wherever `claude` CLI is installed |
+| **D. stdout-delegate** | Script emits `__LLM_DELEGATE__: {…}` lines; host LLM reads them after exit and executes each. No API key or CLI needed inside the script. | scripts that need selective LLM help without SDK deps | every host that runs scripts (universal) |
 
-Mode C is the default because it works on every host and needs zero infrastructure. Modes B and A are optimisations: B adds non-blocking + independent-evaluator parallelism on Claude Code; A adds repeatability + headless batch.
+Mode C is the default because it works on every host and needs zero infrastructure. Modes B and A are optimisations: B adds non-blocking + independent-evaluator parallelism on Claude Code; A adds repeatability + headless batch. Mode D is orthogonal: it lets an existing script hand off selective LLM work to the host without importing a SDK or subprocess-calling `claude`.
 
 The artifact `data/optimized_prompt.json` is consumed identically across all three modes — it is just JSON loaded into the prompt template, so optimisation can be produced on one host and consumed on any other.
 
@@ -84,6 +87,51 @@ python scripts/optimize.py --generate \
 ```
 
 Uses `claude -p` via `scripts/agent.py` — no API key needed if Claude Code is signed in (set `bare=True` in `AgentConfig` only when running headless with `ANTHROPIC_API_KEY`). The LLM call layer (JSON parsing, repair retry, multi-turn chains) lives in `scripts/agent.py`; prompts come from the same `prompts/*.md`.
+
+---
+
+## Mode D — stdout-delegate (universal, no dependencies)
+
+A script emits `__LLM_DELEGATE__:` directives to stdout; the host processes them after the script exits.
+
+```python
+# scripts/classify.py  (Python example)
+from delegate import llm_invoke   # copy scripts/delegate.py into your skill
+
+llm_invoke(
+    f"Classify this commit as feat/fix/chore: {subject}",
+    json_mode=True,
+    out="tmp/label.json",
+)
+```
+
+```js
+// scripts/classify.mjs  (Node example)
+import { llmInvoke } from './delegate.mjs';  // copy scripts/delegate.mjs
+
+llmInvoke({
+  prompt: `Classify this commit as feat/fix/chore: ${subject}`,
+  json: true,
+  out: 'tmp/label.json',
+});
+```
+
+SKILL.md workflow step that consumes the output:
+
+````markdown
+### 3. Classify commits
+
+```bash
+python scripts/classify.py --input data/commits.json
+```
+
+After the script exits, scan stdout for `__LLM_DELEGATE__:` lines and process each:
+- invoke the LLM with `prompt` (prepend `system` if given)
+- for `json: true` directives, use JSON output mode
+- write the response to `out` (create parent dirs as needed)
+````
+
+Full protocol, JSON schema, and helper source → [`atoms/stdout-delegate.md`](atoms/stdout-delegate.md).
 
 ---
 
