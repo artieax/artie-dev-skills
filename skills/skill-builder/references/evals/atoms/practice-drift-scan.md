@@ -39,7 +39,7 @@ in-flight work.
   (used for dedup)
 - `sources` — caller-supplied list. Each entry is one of:
   - URL (docs page, blog post, RSS feed)
-  - GitHub repo (`owner/name` — scanned for `SKILL.md` / `agents.md` patterns)
+  - GitHub repo (`owner/name` — scanned for `SKILL.md` / `AGENTS.md` patterns, case-insensitive so variants like `Agents.md` aren't missed)
   - Local path (e.g. another skill in the same monorepo to compare against)
 - Optional `focus` string — narrow the scan ("eval techniques only",
   "trigger-precision improvements", etc.). Empty = broad scan.
@@ -139,6 +139,19 @@ A proposal that doesn't map to one of the first seven uses `other`.
 Producers must not invent new enum values; consumers can treat `other` as
 "needs human triage."
 
+**Path basis.** `target_path` is **skill-root relative** — relative to
+`skills/<name>/`, never repo-root. So `SKILL.md`, not
+`skills/<name>/SKILL.md`; `references/evals/atoms/foo.md`, not
+`skills/<name>/references/evals/atoms/foo.md`. Downstream routers prepend
+the skill prefix once.
+
+**One proposal, one routing target.** If a recommended change spans multiple
+files (e.g. a SKILL.md edit plus a scaffold template update), emit one
+proposal per file so each can be triaged, accepted, or rejected
+independently. Cross-link the splits by sharing a substring in the title
+(e.g. `"Add a Common pitfalls section …"` + `"… placeholder to minimal
+scaffold"`).
+
 ## Example
 
 Walk-through of one scan against `skills/skill-builder` itself.
@@ -196,15 +209,26 @@ sources:
       "evidence_strength": 7
     },
     {
-      "title": "Require 3+ negative examples in `## When to use`",
+      "title": "Add a `## Common pitfalls` section to SKILL.md",
       "target": "skill_md",
-      "target_path": "skills/skill-builder/SKILL.md",
-      "rationale": "Anthropic skill-creator guide now recommends ≥3 negative examples; current skill has 1.",
+      "target_path": "SKILL.md",
+      "rationale": "Surveyed skills separate runtime traps (`Common pitfalls`) from must-do/never-do rules (`Red flags`). Current skill conflates them under `Red flags`, diluting both lists.",
       "evidence": ["https://code.claude.com/docs/en/skills"],
-      "diff_sketch": "Add 2 bullets under `Do not trigger` plus update `references/scaffold/minimal.md` template.",
-      "fit_for_this_skill": 9,
+      "diff_sketch": "New top-level section after `Red flags`. ~6 bullets covering known traps (e.g. `--skill-root` mis-pointing at `skills/` parent, optimize_description corrupting block scalars).",
+      "fit_for_this_skill": 8,
+      "novelty": 6,
+      "evidence_strength": 7
+    },
+    {
+      "title": "Add a `## Common pitfalls` placeholder to minimal scaffold",
+      "target": "scaffold",
+      "target_path": "references/scaffold/minimal.md",
+      "rationale": "Pairs with the SKILL.md change above so newly scaffolded skills inherit the pattern instead of accreting it later.",
+      "evidence": ["https://code.claude.com/docs/en/skills"],
+      "diff_sketch": "Insert a `## Common pitfalls` heading + comment block between `Red flags` and `Requirements` placeholders.",
+      "fit_for_this_skill": 7,
       "novelty": 5,
-      "evidence_strength": 9
+      "evidence_strength": 7
     },
     {
       "title": "Add fixture-level provenance tags to assertion-grader output",
@@ -220,7 +244,8 @@ sources:
   ],
   "rejected": [
     {"candidate": "auto-bundled multi-skill plugin manifest", "reason": "out of scope — owned by `pluginize` skill"},
-    {"candidate": "memory-augmented session loops", "reason": "out of scope — orthogonal to skill authoring"}
+    {"candidate": "memory-augmented session loops", "reason": "out of scope — orthogonal to skill authoring"},
+    {"candidate": "negative example minimum of 3 in `When to use`", "reason": "already covered — current skill lists 4 negatives under `Do not trigger`"}
   ]
 }
 ```
