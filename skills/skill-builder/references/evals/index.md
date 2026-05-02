@@ -65,6 +65,14 @@ Run these *before* the runtime pipeline. They modify the SKILL.md (or sibling ar
 |---|---|---|---|
 | [`description-optimization`](atoms/description-optimization.md) | optimizer | medium | best `description` field by accuracy on a 20-query trigger eval set |
 
+### Discovery / drift
+
+Open-loop scanners that pull signal in from outside the repo and propose additions. Out-of-band relative to the runtime pipeline; output is advisory (proposals only, never auto-applied). Trigger and source list are supplied by the caller's harness — the atom stays portable.
+
+| Atom | Type | Cost | What it produces |
+|---|---|---|---|
+| [`practice-drift-scan`](atoms/practice-drift-scan.md) | proposer | high | proposals (new atoms / SKILL.md edits / scripts) drawn from caller-supplied external sources |
+
 ---
 
 ## Presets — named atom combinations

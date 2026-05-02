@@ -1,6 +1,6 @@
 {
   "name": "artie-dev-skills",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "artie's dev-focused agent skills — plugin-ified workflows for building, shipping, and maintaining software",
   "author": "artieax",
   "repository": "https://github.com/artieax/artie-dev-skills",
