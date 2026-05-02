@@ -44,8 +44,24 @@ in-flight work.
 - Optional `focus` string — narrow the scan ("eval techniques only",
   "trigger-precision improvements", etc.). Empty = broad scan.
 
-The atom does **not** invent sources. If the caller passes none, it returns
-`{"proposals": [], "error": "no sources supplied"}` and stops.
+The atom does **not** invent sources. If the caller passes none, it stops
+immediately and returns the **same envelope** as a normal run, with
+`proposals` and `rejected` empty and an `error` field set:
+
+```json
+{
+  "scan_date": "2026-05-02",
+  "skill": "skills/<name>",
+  "sources_consulted": [],
+  "proposals": [],
+  "rejected": [],
+  "error": "no sources supplied"
+}
+```
+
+Keeping the shape identical means downstream JSON consumers don't have to
+branch on success vs. error — they can read `proposals` and `error`
+unconditionally.
 
 ## Pipeline
 
@@ -104,9 +120,24 @@ responsibility — the atom just expects fetched text.
 }
 ```
 
-Targets are open-set. `atom`, `skill_md`, `script`, `scaffold`, `reference`,
-`prompt`, `workflow` are the common ones; the atom may emit other strings if
-a proposal genuinely doesn't fit.
+`target` is a closed enum so downstream tooling (PR-checklist generators,
+`acceptance-gate` routers) can dispatch on it without string-matching.
+Allowed values:
+
+| value       | meaning                                                |
+|-------------|--------------------------------------------------------|
+| `atom`      | new or modified file under `references/evals/atoms/`   |
+| `skill_md`  | edit to `SKILL.md`                                     |
+| `script`    | new or modified file under `scripts/`                  |
+| `scaffold`  | edit under `references/scaffold/`                      |
+| `reference` | other file under `references/`                         |
+| `prompt`    | new or modified file under `prompts/`                  |
+| `workflow`  | CI / harness wiring outside the skill's own directory  |
+| `other`     | escape hatch — `target_path` and `rationale` must be specific enough that a human can route the proposal manually |
+
+A proposal that doesn't map to one of the first seven uses `other`.
+Producers must not invent new enum values; consumers can treat `other` as
+"needs human triage."
 
 ## Example
 
@@ -118,7 +149,7 @@ Walk-through of one scan against `skills/skill-builder` itself.
 skill: skills/skill-builder
 focus: "eval techniques and skill-authoring patterns"
 sources:
-  - https://docs.anthropic.com/claude/docs/skills          # official guide
+  - https://code.claude.com/docs/en/skills          # official guide
   - https://www.anthropic.com/engineering                  # eng blog index
   - anthropics/skills                                       # github reference
   - skills/pluginize                                        # sibling skill in monorepo
@@ -147,7 +178,7 @@ sources:
   "scan_date": "2026-05-02",
   "skill": "skills/skill-builder",
   "sources_consulted": [
-    {"source": "https://docs.anthropic.com/claude/docs/skills", "fetched_chars": 22140},
+    {"source": "https://code.claude.com/docs/en/skills", "fetched_chars": 22140},
     {"source": "https://www.anthropic.com/engineering", "fetched_chars": 8430},
     {"source": "anthropics/skills", "fetched_chars": 16200},
     {"source": "skills/pluginize", "fetched_chars": 5210}
@@ -169,7 +200,7 @@ sources:
       "target": "skill_md",
       "target_path": "skills/skill-builder/SKILL.md",
       "rationale": "Anthropic skill-creator guide now recommends ≥3 negative examples; current skill has 1.",
-      "evidence": ["https://docs.anthropic.com/claude/docs/skills"],
+      "evidence": ["https://code.claude.com/docs/en/skills"],
       "diff_sketch": "Add 2 bullets under `Do not trigger` plus update `references/scaffold/minimal.md` template.",
       "fit_for_this_skill": 9,
       "novelty": 5,
@@ -196,7 +227,7 @@ sources:
 
 **What happens next** is the caller's call. A typical wiring:
 
-1. Harness writes the JSON to `tmp/practice-drift-scan/<date>.json`
+1. Harness writes the JSON to a stable path — e.g. `tmp/practice-drift-scan/scan-2026-05-02.json` (date-stamped) or `tmp/practice-drift-scan/report.json` (overwrite-latest). Pick one and keep the filename literal so downstream consumers can glob it.
 2. Opens a PR with the proposals as a checklist in the body
 3. Maintainer ticks off proposals to accept; rejected ones get a one-line note in the PR for the next scan to dedup against
 
