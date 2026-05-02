@@ -12,5 +12,6 @@ See `skills/*` for details.
 
 **Always**
 - Bump `version` in `plugin.json` when updating this file (`AGENTS.md`)
+- Create a worktree under `.worktrees/*` before starting any feature or fix work — no direct commits to `main`
 
 **Never**
