@@ -26,44 +26,34 @@ in under a few seconds. Catches the regressions that broke past iterations:
      in fields that flow into HTML attributes (entry id, version,
      pipeline). Regression guard for entry.id strings like
      `x" autofocus onfocus="alert(1)` breaking out of `data-id="..."`.
-  6. agent._build_argv() honors the new disable_tools / tools fields and
-     does not panic on a None-ish tools value (regression guard for
-     "--tools '' is the safe default" P1)
-  7. agent.call_json() round-trips through a fake `claude` executable on a
-     temp PATH — exercises the real subprocess code path (argv shape,
-     stdin piping, JSON envelope unwrap), not just _build_argv()
-  8. optimize_description.load_skill_md() parses the live SKILL.md and the
+  6. agent.call_emit() emits a correctly-formatted __LLM_DELEGATE__ line
+     (Mode D stdout-delegate — no subprocess, no API key needed).
+  7. optimize_description.load_skill_md() parses the live SKILL.md and the
      description is a single-line scalar (the parser does not yet handle
      folded / block YAML scalars — see references/scaffold/atoms/orchestrator.md).
      Also verifies that replace_description() collapses multi-line input to
      a single-line scalar (--apply must never write a half-quoted multi-line
      description that load_skill_md would then refuse).
-  8b. optimize.bootstrap_select(candidates=...) does NOT re-build candidates,
-     so the seed-replay contract holds: the candidate_sets persisted to
-     optimized_prompt.json is exactly what the optimizer evaluated.
-  9. references/dependency-graph.md only references skills that actually
+  8. references/dependency-graph.md only references skills that actually
      exist as skills/<name>/SKILL.md on disk — catches stale edges after a
      rename (e.g. "pluginize → skill-creator" when the dir is skill-builder)
- 10. collect_evals.collect() against a synthetic temp skill root: stages
+  9. collect_evals.collect() against a synthetic temp skill root: stages
      SKILL.md + projects/<name>/v1/{eval.json, input.md, skill.md} and
      asserts data/evals.jsonl has exactly one record with skill_md /
      change_notes / total populated. Locks the producer-side schema that
      optimize.py / generate_review.py / tune_thresholds.py read from.
- 11. collect_evals.main(): pointing --skill-root at a directory without
+ 10. collect_evals.main(): pointing --skill-root at a directory without
      SKILL.md raises SystemExit (footgun guard for "Form A from repo
      root"); --allow-missing-skill-md downgrades it to a warning.
- 12. optimize.score_scaffold(stored_scores=...) coerces every per-metric
-     value through optimize._coerce_metric — a hand-edited
-     data/evals.jsonl carrying "7" (string) used to crash with
-     TypeError, and True silently summed as 1. Lock both paths.
- 13. optimize_description._load_cached_eval_set is the single cache
-     validator shared by both --estimate-only and the live path, so a
-     corrupt / under-sized cache cannot under-count regeneration calls
-     in --estimate-only output.
- 14. tune_thresholds.simulate() must NOT plateau on a regressing
+ 11. optimize_description._load_cached_eval_set is the single cache
+     validator shared by both --emit-eval-set and the live path, so a
+     corrupt / under-sized cache cannot trigger an unnecessary regeneration.
+ 12. tune_thresholds.simulate() must NOT plateau on a regressing
      sequence (improvement < 0) or on a per-metric regression even
      when the weighted average improved — the previous gate fired on
      both, freezing strictly worse skills as "done".
+ 13. optimize._coerce_metric and _score_from_dict handle non-numeric
+     inputs correctly.
 
 Exit non-zero on any failure with a clear marker message. Stdlib only.
 
@@ -75,12 +65,11 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import io
 import json
 import os
 import py_compile
 import re
-import shutil
-import stat
 import sys
 import tempfile
 import textwrap
@@ -806,23 +795,11 @@ def check_tune_thresholds_regression_guard(skill_root: Path) -> list[str]:
     return failures
 
 
-def check_optimize_stored_scores_coercion(skill_root: Path) -> list[str]:
+def check_optimize_coerce_metric(skill_root: Path) -> list[str]:
     """
-    `optimize.score_scaffold(stored_scores=...)` previously summed the
-    per-metric values directly:
-
-        return sum(stored_scores[m] for m in METRICS) / 50.0
-
-    A hand-edited or legacy ``data/evals.jsonl`` carrying ``"7"`` (string)
-    raised ``TypeError``; ``True`` silently summed as 1 and corrupted the
-    optimizer's pick. The fix runs every value through ``_coerce_metric``
-    — the same defensive coercion the LLM-judge path uses — and returns
-    0.0 when any metric is un-coercible so the bad scaffold drops out.
-
-    Lock all three branches:
-      * legitimate numeric scores → normalised total in [0, 1]
-      * a string-typed metric → return 0.0 (no crash)
-      * a bool-typed metric → return 0.0 (no silent True→1 collapse)
+    optimize._coerce_metric and _score_from_dict correctly handle non-numeric
+    inputs so a hand-edited data/evals.jsonl carrying "7" (string) or True
+    (bool) does not corrupt the optimizer's pick.
     """
     failures: list[str] = []
     sys.path.insert(0, str(_scripts_dir(skill_root)))
@@ -832,52 +809,41 @@ def check_optimize_stored_scores_coercion(skill_root: Path) -> list[str]:
         return [f"failed to import optimize module: {e}"]
 
     if not hasattr(optimize, "_coerce_metric"):
-        failures.append(
-            "optimize._coerce_metric not exposed at module scope — the "
-            "stored_scores path needs the same defensive coercion as the "
-            "LLM-judge path; hoisting it out of score_scaffold() is the fix"
-        )
+        failures.append("optimize._coerce_metric not exposed at module scope")
+        return failures
+
+    # Legitimate numeric → expected value
+    if optimize._coerce_metric(8) != 8.0:
+        failures.append("_coerce_metric(8) should return 8.0")
+    # Clamping
+    if optimize._coerce_metric(15) != 10.0:
+        failures.append("_coerce_metric(15) should clamp to 10.0")
+    if optimize._coerce_metric(-3) != 0.0:
+        failures.append("_coerce_metric(-3) should clamp to 0.0")
+    # Non-numeric → None
+    if optimize._coerce_metric("7") is not None:
+        failures.append("_coerce_metric('7') should return None (string rejected)")
+    if optimize._coerce_metric(True) is not None:
+        failures.append("_coerce_metric(True) should return None (bool rejected)")
+    if optimize._coerce_metric(None) is not None:
+        failures.append("_coerce_metric(None) should return None")
+    if optimize._coerce_metric(float("nan")) is not None:
+        failures.append("_coerce_metric(nan) should return None")
+
+    if not hasattr(optimize, "_score_from_dict"):
+        failures.append("optimize._score_from_dict not exposed at module scope")
+        return failures
 
     legit = {m: 8 for m in optimize.METRICS}
-    legit_score = optimize.score_scaffold("ignored-scaffold", stored_scores=legit)
-    expected = sum(legit.values()) / 50.0
-    if abs(legit_score - expected) > 1e-9:
-        failures.append(
-            f"score_scaffold(stored_scores=numeric): expected {expected!r}, "
-            f"got {legit_score!r}"
-        )
+    score = optimize._score_from_dict(legit)
+    expected = 40.0 / 50.0
+    if abs(score - expected) > 1e-9:
+        failures.append(f"_score_from_dict(all 8s) expected {expected:.4f}, got {score:.4f}")
 
-    string_metric = {m: 8 for m in optimize.METRICS}
-    string_metric["trigger_precision"] = "8"  # type: ignore[assignment]
-    try:
-        string_score = optimize.score_scaffold(
-            "ignored-scaffold", stored_scores=string_metric
-        )
-    except TypeError as e:
-        failures.append(
-            f"score_scaffold(stored_scores=string-typed metric) raised "
-            f"TypeError: {e} — should return 0.0 instead so the bad "
-            "scaffold falls out of the optimizer"
-        )
-    else:
-        if string_score != 0.0:
-            failures.append(
-                f"score_scaffold(stored_scores=string-typed metric) returned "
-                f"{string_score!r}; expected 0.0 (un-coercible value must "
-                "drop the scaffold, not silently coerce)"
-            )
-
-    bool_metric = {m: 8 for m in optimize.METRICS}
-    bool_metric["dep_accuracy"] = True  # type: ignore[assignment]
-    bool_score = optimize.score_scaffold(
-        "ignored-scaffold", stored_scores=bool_metric
-    )
-    if bool_score != 0.0:
-        failures.append(
-            f"score_scaffold(stored_scores=bool-typed metric) returned "
-            f"{bool_score!r}; expected 0.0 (True is an int subclass — "
-            "without explicit bool rejection it would silently sum as 1)"
-        )
+    bad = {m: 8 for m in optimize.METRICS}
+    bad["trigger_precision"] = "high"  # type: ignore[assignment]
+    if optimize._score_from_dict(bad) != 0.0:
+        failures.append("_score_from_dict with a string metric should return 0.0")
 
     return failures
 
@@ -959,19 +925,9 @@ def check_optimize_description_estimate_cache(skill_root: Path) -> list[str]:
     return failures
 
 
-def check_optimize_candidate_replay(skill_root: Path) -> list[str]:
+def check_optimize_build_candidates(skill_root: Path) -> list[str]:
     """
-    optimize.py persists `candidate_sets` from a seeded RNG, then runs
-    bootstrap_select() over the *same* candidates. The bug we are guarding
-    against: passing the already-advanced RNG to bootstrap_select() makes
-    it call `_build_candidates` a second time and evaluate a *different*
-    subset than the one it just saved, breaking --seed replay.
-
-    The contract we lock here:
-      1. Seeding -> _build_candidates is deterministic.
-      2. bootstrap_select(..., candidates=cands) does NOT advance an RNG
-         (so two parallel runs with the same seed produce the same saved
-         candidate_sets and the same evaluated subset).
+    optimize._build_candidates is deterministic under a fixed seed.
     """
     failures: list[str] = []
     sys.path.insert(0, str(_scripts_dir(skill_root)))
@@ -981,8 +937,10 @@ def check_optimize_candidate_replay(skill_root: Path) -> list[str]:
     except Exception as e:  # noqa: BLE001
         return [f"failed to import optimize module: {e}"]
 
-    trainset = [{"id": f"ex/{i}"} for i in range(6)]
+    if not hasattr(optimize, "_build_candidates"):
+        return ["optimize._build_candidates not exposed at module scope"]
 
+    trainset = [{"id": f"ex/{i}"} for i in range(6)]
     rng_a = _random.Random(1234)
     rng_b = _random.Random(1234)
     cands_a = optimize._build_candidates(trainset, max_demos=2, trials=4, rng=rng_a)
@@ -992,119 +950,17 @@ def check_optimize_candidate_replay(skill_root: Path) -> list[str]:
             f"_build_candidates is non-deterministic under fixed seed: "
             f"{cands_a!r} vs {cands_b!r}"
         )
-
-    if not hasattr(optimize, "bootstrap_select"):
-        return failures + ["optimize.bootstrap_select missing — refactor regression"]
-
-    # Whitebox check: passing `candidates=` must short-circuit the
-    # _build_candidates branch so that an externally-built list is what
-    # gets evaluated. We patch _build_candidates to a sentinel that would
-    # raise if called, and patch the per-pair work to no-ops, then verify
-    # bootstrap_select walks exactly the candidates we passed in.
-    sentinel: list[tuple[int, ...]] = []
-
-    def _boom(*_a, **_kw):
-        sentinel.append(("CALLED",))
-        return [(0, 1)]
-
-    real_build = optimize._build_candidates
-    real_generate = optimize.generate_scaffold
-    real_score = optimize.score_scaffold
-    optimize._build_candidates = _boom  # type: ignore[assignment]
-    optimize.generate_scaffold = lambda *a, **kw: "scaffold"  # type: ignore[assignment]
-    optimize.score_scaffold = lambda *a, **kw: 0.5  # type: ignore[assignment]
-    try:
-        trainset_local = [
-            {"id": f"ex/{i}", "description": "d", "requirements": "r", "scaffold": "s"}
-            for i in range(4)
-        ]
-        explicit = [(0, 1), (2, 3)]
-        best_demos, best_score = optimize.bootstrap_select(
-            trainset_local,
-            max_demos=2,
-            trials=2,
-            candidates=explicit,
-        )
-        if sentinel:
-            failures.append(
-                "bootstrap_select(candidates=...) still called _build_candidates; "
-                "the seed-replay contract is broken (saved candidate_sets "
-                "would diverge from evaluated subset)"
-            )
-        if best_score <= 0.0:
-            failures.append(
-                f"bootstrap_select returned non-positive score {best_score!r} "
-                "from the patched fixture; the candidates= path was not exercised"
-            )
-        if not best_demos:
-            failures.append(
-                "bootstrap_select returned no demos from the patched fixture"
-            )
-    finally:
-        optimize._build_candidates = real_build  # type: ignore[assignment]
-        optimize.generate_scaffold = real_generate  # type: ignore[assignment]
-        optimize.score_scaffold = real_score  # type: ignore[assignment]
+    if not cands_a:
+        failures.append("_build_candidates returned empty list for 6-example trainset")
 
     return failures
 
 
-def check_agent_argv(skill_root: Path) -> list[str]:
-    """`agent._build_argv` honors the new tools / disable_tools fields."""
-    failures: list[str] = []
-    sys.path.insert(0, str(_scripts_dir(skill_root)))
-    try:
-        import agent  # noqa: WPS433
-    except Exception as e:  # noqa: BLE001
-        return [f"failed to import agent module: {e}"]
-
-    cfg_default = agent.AgentConfig()
-    argv_default = agent._build_argv(cfg_default, system="sys", json_mode=False)
-    if "--tools" not in argv_default:
-        failures.append("default AgentConfig should pass --tools \"\" but did not")
-    else:
-        idx = argv_default.index("--tools")
-        if argv_default[idx + 1] != "":
-            failures.append(
-                f"default AgentConfig should pass --tools \"\" but got {argv_default[idx + 1]!r}"
-            )
-
-    cfg_allow = agent.AgentConfig(tools="Read,Bash(git *)", disable_tools=False)
-    argv_allow = agent._build_argv(cfg_allow, system="sys", json_mode=False)
-    if "--tools" not in argv_allow or argv_allow[argv_allow.index("--tools") + 1] != "Read,Bash(git *)":
-        failures.append(f"explicit tools allow-list not propagated: {argv_allow}")
-
-    cfg_defer = agent.AgentConfig(tools="", disable_tools=False)
-    argv_defer = agent._build_argv(cfg_defer, system="sys", json_mode=False)
-    if "--tools" in argv_defer:
-        failures.append(
-            f"empty tools + disable_tools=False should NOT pass --tools, got: {argv_defer}"
-        )
-
-    if not isinstance(cfg_default.timeout_s, int) or cfg_default.timeout_s <= 0:
-        failures.append(
-            f"AgentConfig.timeout_s should be a positive int, got {cfg_default.timeout_s!r}"
-        )
-    return failures
-
-
-_FAKE_CLAUDE_SCRIPT = textwrap.dedent(
-    """\
-    #!/usr/bin/env python3
-    # Fake `claude` for smoke_test.py — records argv and stdin to FAKE_CLAUDE_RECORD,
-    # then prints a JSON envelope whose .result is itself a JSON string.
-    import json, os, sys
-    record_path = os.environ.get("FAKE_CLAUDE_RECORD")
-    stdin_data = sys.stdin.read() if not sys.stdin.isatty() else ""
-    if record_path:
-        with open(record_path, "w", encoding="utf-8") as f:
-            json.dump({"argv": sys.argv[1:], "stdin": stdin_data}, f, ensure_ascii=False)
-    print(json.dumps({"result": json.dumps({"ok": True, "echoed": stdin_data[:64]})}))
+def check_agent_delegate(skill_root: Path) -> list[str]:
     """
-)
-
-
-def check_agent_subprocess(skill_root: Path) -> list[str]:
-    """End-to-end: stage a fake `claude` on PATH and exercise call_json()."""
+    agent.call_emit() emits a correctly-formatted __LLM_DELEGATE__ line
+    to stdout (Mode D — no subprocess, no API key, no claude CLI).
+    """
     failures: list[str] = []
     sys.path.insert(0, str(_scripts_dir(skill_root)))
     try:
@@ -1112,93 +968,68 @@ def check_agent_subprocess(skill_root: Path) -> list[str]:
     except Exception as e:  # noqa: BLE001
         return [f"failed to import agent module: {e}"]
 
-    if shutil.which("python3") is None:
-        return ["python3 not found on PATH; cannot stage fake `claude` for contract test"]
+    buf = io.StringIO()
+    old_stdout = sys.stdout
+    sys.stdout = buf
+    try:
+        out_path = agent.call_emit(
+            "hello world",
+            out="tmp/smoke/result.txt",
+            system="be terse",
+            json_mode=True,
+            id="smoke_test",
+        )
+    finally:
+        sys.stdout = old_stdout
 
+    if out_path != "tmp/smoke/result.txt":
+        failures.append(f"call_emit() should return the out path, got {out_path!r}")
+
+    output = buf.getvalue().strip()
+    if not output.startswith("__LLM_DELEGATE__: "):
+        failures.append(f"call_emit() did not emit __LLM_DELEGATE__ prefix: {output[:120]!r}")
+        return failures
+
+    try:
+        payload = json.loads(output[len("__LLM_DELEGATE__: "):])
+    except json.JSONDecodeError as e:
+        failures.append(f"call_emit() emitted invalid JSON: {e} — {output[:200]!r}")
+        return failures
+
+    for field, expected in [
+        ("prompt", "hello world"),
+        ("out", "tmp/smoke/result.txt"),
+        ("system", "be terse"),
+        ("id", "smoke_test"),
+    ]:
+        if payload.get(field) != expected:
+            failures.append(f"payload[{field!r}] expected {expected!r}, got {payload.get(field)!r}")
+    if payload.get("json") is not True:
+        failures.append(f"payload['json'] should be True, got {payload.get('json')!r}")
+
+    # _extract_json_object round-trip
+    sample = '{"ok": true, "score": 42}'
+    parsed = agent._extract_json_object(sample)
+    if parsed != {"ok": True, "score": 42}:
+        failures.append(f"_extract_json_object({sample!r}) returned {parsed!r}")
+    if agent._extract_json_object("no json here") is not None:
+        failures.append("_extract_json_object should return None when no JSON found")
+
+    # result_exists / load_state / save_state round-trip (no filesystem side-effects
+    # beyond a single tempdir)
     with tempfile.TemporaryDirectory() as td:
-        td_path = Path(td)
-        record_path = td_path / "recording.json"
-        fake_claude = td_path / "claude"
-        fake_claude.write_text(_FAKE_CLAUDE_SCRIPT, encoding="utf-8")
-        fake_claude.chmod(fake_claude.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+        state_path = os.path.join(td, "state.json")
+        if agent.result_exists(state_path):
+            failures.append("result_exists() returned True for nonexistent file")
+        agent.save_state(state_path, {"phase": "test", "n": 3})
+        if not agent.result_exists(state_path):
+            failures.append("result_exists() returned False after save_state()")
+        loaded = agent.load_state(state_path)
+        if loaded != {"phase": "test", "n": 3}:
+            failures.append(f"load_state() round-trip failed: got {loaded!r}")
+        if agent.load_state(os.path.join(td, "missing.json")) is not None:
+            failures.append("load_state() should return None for missing file")
 
-        old_path = os.environ.get("PATH", "")
-        old_record = os.environ.get("FAKE_CLAUDE_RECORD")
-        os.environ["PATH"] = f"{td}{os.pathsep}{old_path}"
-        os.environ["FAKE_CLAUDE_RECORD"] = str(record_path)
-        # Reset the process-wide call counter — earlier checks may have bumped it.
-        agent.set_call_budget(None)
-        result = None
-        try:
-            try:
-                result = agent.call_json(
-                    "hello world",
-                    system="be terse",
-                    cfg=agent.AgentConfig(timeout_s=10),
-                )
-            except Exception as e:  # noqa: BLE001
-                failures.append(f"agent.call_json() with fake `claude` raised: {e}")
-
-            # Inspect the recording before the tempdir is cleaned up.
-            if not record_path.exists():
-                failures.append(
-                    "fake `claude` did not write recording — subprocess never invoked? "
-                    f"shutil.which('claude')={shutil.which('claude')!r}"
-                )
-            else:
-                try:
-                    rec = json.loads(record_path.read_text(encoding="utf-8"))
-                except json.JSONDecodeError as e:
-                    failures.append(f"could not parse fake-claude recording: {e}")
-                    rec = None
-
-                if rec is not None:
-                    stdin_seen = rec.get("stdin", "")
-                    if "hello world" not in stdin_seen:
-                        failures.append(
-                            f"prompt was not piped to stdin: {stdin_seen[:120]!r}"
-                        )
-                    argv = rec.get("argv", [])
-                    expected_flags = [
-                        "-p",
-                        "--tools",
-                        "--output-format",
-                        "--append-system-prompt",
-                    ]
-                    for flag in expected_flags:
-                        if flag not in argv:
-                            failures.append(f"{flag!r} missing from argv: {argv}")
-                    if "--output-format" in argv:
-                        idx = argv.index("--output-format")
-                        if idx + 1 >= len(argv) or argv[idx + 1] != "json":
-                            failures.append(
-                                f"--output-format value should be 'json', got argv: {argv}"
-                            )
-                    if "--append-system-prompt" in argv:
-                        idx = argv.index("--append-system-prompt")
-                        if idx + 1 >= len(argv):
-                            failures.append(f"--append-system-prompt missing value: {argv}")
-                        else:
-                            sys_prompt = argv[idx + 1]
-                            if "be terse" not in sys_prompt:
-                                failures.append(
-                                    "user-provided system prompt 'be terse' was dropped: "
-                                    f"{sys_prompt[:120]!r}"
-                                )
-                            if "automated batch mode" not in sys_prompt:
-                                failures.append(
-                                    "autonomous-mode prefix missing from --append-system-prompt: "
-                                    f"{sys_prompt[:120]!r}"
-                                )
-        finally:
-            os.environ["PATH"] = old_path
-            if old_record is None:
-                os.environ.pop("FAKE_CLAUDE_RECORD", None)
-            else:
-                os.environ["FAKE_CLAUDE_RECORD"] = old_record
-
-    if not isinstance(result, dict) or result.get("ok") is not True:
-        failures.append(f"call_json() did not return parsed envelope: {result!r}")
     return failures
 
 
@@ -1543,14 +1374,13 @@ def main() -> int:
         ("review_whitelist", check_review_whitelist),
         ("review_xss", check_review_xss),
         ("review_attribute_xss", check_review_attribute_xss),
+        ("agent_delegate", check_agent_delegate),
         ("skill_md_description", check_skill_md_description),
         ("optimize_extract_requirements", check_optimize_extract_requirements),
-        ("optimize_stored_scores_coercion", check_optimize_stored_scores_coercion),
+        ("optimize_coerce_metric", check_optimize_coerce_metric),
+        ("optimize_build_candidates", check_optimize_build_candidates),
         ("optimize_description_estimate_cache", check_optimize_description_estimate_cache),
         ("tune_thresholds_regression_guard", check_tune_thresholds_regression_guard),
-        ("optimize_candidate_replay", check_optimize_candidate_replay),
-        ("agent_argv", check_agent_argv),
-        ("agent_subprocess", check_agent_subprocess),
         ("dependency_graph", check_dependency_graph),
         ("collect_evals_fixture", check_collect_evals_fixture),
         ("collect_evals_footgun", check_collect_evals_footgun),
