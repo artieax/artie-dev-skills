@@ -116,6 +116,161 @@ iter/skill-builder-v2
 
 ---
 
+## benchmark
+
+**Atom combination:** `scripts` + `versioned-projects`
+
+```
+frontmatter + trigger + workflow + redflag + output + requirements
++ references-dir + scripts-dir + versioned-projects
+```
+
+**Use when:** The skill runs repeatable benchmark campaigns, needs versioned run history, and benefits from a stable markdown report per run. Parallel lanes and public/OSS corpora are common here, but they are part of the benchmark design, not a generic preset contract.
+
+### Directory layout
+
+```
+skills/<skill-name>/
+├── SKILL.md
+├── references/
+│   ├── <rubric>.md
+│   └── eval-log.jsonl
+├── scripts/
+│   ├── bench.mjs
+│   ├── compare.mjs
+│   └── <helper>.mjs
+└── projects/
+    └── <project-name>/
+        ├── v1/
+        │   ├── input.md
+        │   └── output/
+        │       ├── lanes/
+        │       │   ├── lane-a.json
+        │       │   └── lane-b.json
+        │       ├── results.jsonl
+        │       └── report.md
+        ├── v2/
+        │   ├── input.md
+        │   └── output/
+        └── current.md
+```
+
+Ephemeral worktrees are **not** part of the saved artifact tree above. Treat them as scratch execution environments under a separate runtime path such as `.worktrees/` or `tmp/worktrees/`, and clean them up after scoring.
+
+### SKILL.md additions
+
+```markdown
+## Benchmark runs
+
+- Each BENCH run creates a new `projects/<project-name>/v<N>/` folder
+- Every run writes `output/results.jsonl` and `output/report.md`
+- `current.md` moves only when the run is successful under the base `versioned-projects` rule
+
+### Run outcomes
+
+- A run with at least one valid scored lane is successful, even if the report says `no clear winner`
+- If every lane fails, keep the version folder and report for debugging, but do not advance `current.md`
+```
+
+### Parallel worktree lanes
+
+If a benchmark lane can modify a repository or needs a distinct git state, run each lane in its own worktree.
+
+```bash
+git fetch <remote> <base-ref>
+git worktree add -b bench/<project-name>-<lane> .worktrees/<project-name>-<lane> <base-ref>
+```
+
+`<base-ref>` should usually resolve to the repository's default branch once per run, rather than hard-coding `main`.
+
+Rules:
+
+- Keep the launcher or main working directory untouched; never branch-swap it for a benchmark lane
+- Run lane-specific setup and benchmark commands inside the lane worktree only
+- Write lane-level scores and artifacts back to `projects/<project-name>/v<N>/output/`
+- Keep ephemeral worktrees outside the versioned `output/` tree so persisted artifacts stay clean
+- Lane branches are throwaway scratch branches by default
+- Unless the benchmark explicitly scores git history, do not create commits inside lane worktrees
+- If cleanup fails because a lane is dirty or otherwise unresolved, keep that worktree, record the path in `report.md`, and skip automatic branch deletion for that lane
+- When `--parallel <n>` is used, create one lane record per runner so the final comparison is reproducible
+
+### Default sourcing policy
+
+When the benchmark is meant to generalize to public code, prefer real OSS repos, issues, PRs, fixtures, and benchmark tasks over synthetic examples. For internal, private, or customer-data benchmarks, use the domain-native corpus instead and document its source constraints in `input.md`.
+
+For public/OSS benchmarks:
+
+- Prefer real OSS sources when they match the target domain
+- Use synthetic fixtures only to fill gaps that public sources do not cover
+- Record the chosen repo URL plus commit, tag, or release in `input.md` so the run is reproducible
+- When multiple materially different OSS candidates exist, compare at least 2 before freezing the benchmark set
+- Explain in `report.md` when a synthetic case was used instead of an OSS source
+
+Why:
+
+- OSS tasks usually surface edge cases, conventions, and failure modes that toy tasks miss
+- The resulting rankings tend to predict real-world quality better than hand-written micro-benchmarks
+
+### Example run artifact tree
+
+One completed run should look roughly like this:
+
+```text
+skills/<skill-name>/
+└── projects/
+    └── benchmark-a/
+        ├── current.md
+        └── v3/
+            ├── input.md
+            └── output/
+                ├── lanes/
+                │   ├── lane-a.json
+                │   └── lane-b.json
+                ├── results.jsonl
+                └── report.md
+```
+
+### `report.md` template
+
+```markdown
+# Benchmark report — <project-name> v<N>
+
+## Run summary
+
+- Archetype: benchmark
+- Parallel lanes: <n>
+- Scoring rubric: <reference>
+- Winner: <lane-id> | no clear winner | all lanes failed
+
+## Lane comparison
+
+| Lane | Score | Pass rate | Duration | Cost | Notes |
+|---|---:|---:|---:|---:|---|
+| lane-a | 84 | 0.90 | 132s | 12k tok | strongest overall |
+| lane-b | 79 | 0.85 | 101s | 10k tok | cheaper but missed edge case |
+
+## Source set
+
+- <repo>@<commit-or-tag>
+- <repo>@<commit-or-tag>
+
+## Regressions / caveats
+
+- <risk or tie note>
+
+## Artifact paths
+
+- `output/results.jsonl`
+- `output/lanes/`
+```
+
+### When NOT to use this archetype
+
+- The skill only needs a reusable shell/file workflow, with no benchmark campaign concept → use `scripts`
+- The skill needs versioned outputs but not benchmark comparison, lane scoring, or report ranking → use `versioned`
+
+---
+
 ## comparator
 
 **Atom combination:** `orchestrator` + 4 × `child-skill` (`-collect` / `-compare` / `-recommend` / `-report`)

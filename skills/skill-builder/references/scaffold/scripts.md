@@ -61,5 +61,5 @@ Expected output: `references/collected.jsonl` with N records.
 
 ## When to upgrade
 
-- Add `versioned-projects` as well (→ [`benchmark`](benchmark.md)) when the skill runs repeatable benchmark campaigns or needs `projects/<name>/v<N>/` history
+- Adopt the [`benchmark` archetype](../archetypes.md#benchmark) when the skill runs repeatable benchmark campaigns or needs `projects/<project-name>/v<N>/` history
 - Switch to [`split`](split.md) when scripts belong to independently triggerable phases rather than one flow
