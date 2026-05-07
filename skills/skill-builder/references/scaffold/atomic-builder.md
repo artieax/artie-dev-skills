@@ -103,7 +103,7 @@ EXTRACT: catalog
 PICK:    frontmatter + trigger + workflow + redflag + output + requirements
          + references-dir + scripts-dir + versioned-projects
 BUILD:   skills/<name>/SKILL.md + references/ + scripts/ + projects/
-        # each BENCH run writes projects/<name>/v<N>/output/report.md
+        # each BENCH run writes projects/<project-name>/v<N>/output/report.md
 ```
 
 ### Building an orchestrator pipeline
