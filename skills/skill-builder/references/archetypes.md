@@ -180,7 +180,13 @@ Ephemeral worktrees are **not** part of the saved artifact tree above. Treat the
 ### Run outcomes
 
 - Define `lanes` in the BENCH run config, preferably as YAML frontmatter in `input.md`
-- Define `required_lanes` in that same run config when not all lanes are mandatory; otherwise, treat every lane listed in `lanes` as required
+- `lanes` is the complete manifest of comparison arms for the run
+- `required_lanes` and `optional_lanes` are both subsets of `lanes`
+- `required_lanes` and `optional_lanes` must be disjoint
+- If neither `required_lanes` nor `optional_lanes` is provided, treat every lane in `lanes` as required
+- If only `required_lanes` is provided, derive `optional_lanes = lanes - required_lanes`
+- If only `optional_lanes` is provided, derive `required_lanes = lanes - optional_lanes`
+- If both are provided, their union must equal `lanes`; otherwise the run config is invalid
 - `complete` = all required lanes produced valid scored results; `no clear winner` is allowed
 - `partial` = at least one lane scored, but one or more required lanes failed or are missing
 - `failed` = no required lane produced a valid scored result
@@ -201,10 +207,15 @@ optional_lanes: [lane-c]
 
 `current.md` points to the latest **complete** run, not necessarily to a run with a single adopted winner. A complete run that ends in `no clear winner` may still advance `current.md`.
 
+### Path conventions
+
+All paths stored in `current.md`, `output/run.json`, and `output/report.md` should be **repo-root relative**.
+
 Minimal `current.md` shape:
 
 ```yaml
 ---
+schema_version: 1
 current_run: v3
 run_status: complete
 winner: no clear winner
@@ -286,10 +297,14 @@ skills/<skill-name>/
 
 ```json
 {
+  "schema_version": 1,
   "project": "benchmark-a",
   "version": "v3",
   "run_status": "complete",
   "winner": "no clear winner",
+  "lanes": ["lane-a", "lane-b", "lane-c"],
+  "required_lanes": ["lane-a", "lane-b"],
+  "optional_lanes": ["lane-c"],
   "parallelism": 3,
   "benchmark_script_version": "bench.mjs@abc1234",
   "model": {
@@ -307,6 +322,27 @@ skills/<skill-name>/
       "commit_sha": "abcdef1234567890",
       "tag": "v1.2.3"
     }
+  ],
+  "artifacts": {
+    "report": "projects/benchmark-a/v3/output/report.md",
+    "results_jsonl": "projects/benchmark-a/v3/output/results.jsonl",
+    "lanes_dir": "projects/benchmark-a/v3/output/lanes/"
+  },
+  "lane_summaries": [
+    {
+      "lane_id": "lane-a",
+      "status": "complete",
+      "replicas_total": 2,
+      "replicas_scored": 2,
+      "artifact_dir": "projects/benchmark-a/v3/output/lanes/lane-a/"
+    },
+    {
+      "lane_id": "lane-b",
+      "status": "partial",
+      "replicas_total": 2,
+      "replicas_scored": 1,
+      "artifact_dir": "projects/benchmark-a/v3/output/lanes/lane-b/"
+    }
   ]
 }
 ```
@@ -315,6 +351,7 @@ skills/<skill-name>/
 
 ```markdown
 ---
+schema_version: 1
 project: benchmark-a
 version: v3
 run_status: complete
@@ -352,9 +389,9 @@ run_json: projects/<project-name>/v3/output/run.json
 
 ## Artifact paths
 
-- `output/run.json`
-- `output/results.jsonl`
-- `output/lanes/`
+- `projects/<project-name>/v<N>/output/run.json`
+- `projects/<project-name>/v<N>/output/results.jsonl`
+- `projects/<project-name>/v<N>/output/lanes/`
 - Retained scratch worktrees: `.worktrees/<project-name>-lane-b-v3`  # only when cleanup was skipped
 ```
 
