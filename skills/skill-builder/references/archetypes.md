@@ -149,9 +149,13 @@ skills/<skill-name>/
         ├── v1/
         │   ├── input.md
         │   └── output/
+        │       ├── run.json
         │       ├── lanes/
-        │       │   ├── lane-a.json
-        │       │   └── lane-b.json
+        │       │   ├── lane-a/
+        │       │   │   ├── replica-1.json
+        │       │   │   └── replica-2.json
+        │       │   └── lane-b/
+        │       │       └── replica-1.json
         │       ├── results.jsonl
         │       └── report.md
         ├── v2/
@@ -168,17 +172,20 @@ Ephemeral worktrees are **not** part of the saved artifact tree above. Treat the
 ## Benchmark runs
 
 - Each BENCH run creates a new `projects/<project-name>/v<N>/` folder
-- Every run writes `output/results.jsonl` and `output/report.md`
-- Every run writes `run_status: complete | partial | failed` into `report.md`
+- Every run writes `output/run.json`, `output/results.jsonl`, and `output/report.md`
+- `output/run.json` is the canonical machine-readable run summary
+- `report.md` should mirror the key fields from `output/run.json` in YAML frontmatter for human-readable inspection
 - `current.md` moves only when the run is `complete`
 
 ### Run outcomes
 
-- Define `required_lanes` in the BENCH run config, preferably as YAML frontmatter in `input.md`; otherwise, treat all lanes as required
+- Define `lanes` in the BENCH run config, preferably as YAML frontmatter in `input.md`
+- Define `required_lanes` in that same run config when not all lanes are mandatory; otherwise, treat every lane listed in `lanes` as required
 - `complete` = all required lanes produced valid scored results; `no clear winner` is allowed
 - `partial` = at least one lane scored, but one or more required lanes failed or are missing
 - `failed` = no required lane produced a valid scored result
 - `partial` and `failed` runs keep their version folder and report for debugging, but do not advance `current.md`
+- Every `results.jsonl` record must include `lane_id` and `replica_id`
 ```
 
 Minimal `input.md` frontmatter shape:
@@ -186,12 +193,24 @@ Minimal `input.md` frontmatter shape:
 ```yaml
 ---
 project: benchmark-a
+lanes: [lane-a, lane-b, lane-c]
 required_lanes: [lane-a, lane-b]
 optional_lanes: [lane-c]
 ---
 ```
 
 `current.md` points to the latest **complete** run, not necessarily to a run with a single adopted winner. A complete run that ends in `no clear winner` may still advance `current.md`.
+
+Minimal `current.md` shape:
+
+```yaml
+---
+current_run: v3
+run_status: complete
+winner: no clear winner
+report: projects/<project-name>/v3/output/report.md
+---
+```
 
 ### Parallel worktree lanes
 
@@ -252,16 +271,58 @@ skills/<skill-name>/
         └── v3/
             ├── input.md
             └── output/
+                ├── run.json
                 ├── lanes/
-                │   ├── lane-a.json
-                │   └── lane-b.json
+                │   ├── lane-a/
+                │   │   ├── replica-1.json
+                │   │   └── replica-2.json
+                │   └── lane-b/
+                │       └── replica-1.json
                 ├── results.jsonl
                 └── report.md
+```
+
+### `run.json` schema
+
+```json
+{
+  "project": "benchmark-a",
+  "version": "v3",
+  "run_status": "complete",
+  "winner": "no clear winner",
+  "parallelism": 3,
+  "benchmark_script_version": "bench.mjs@abc1234",
+  "model": {
+    "provider": "openai",
+    "name": "gpt-5",
+    "version": "2026-05-01"
+  },
+  "env_flags": {
+    "seed": 42,
+    "network": "off"
+  },
+  "sources": [
+    {
+      "repo": "owner/repo",
+      "commit_sha": "abcdef1234567890",
+      "tag": "v1.2.3"
+    }
+  ]
+}
 ```
 
 ### `report.md` template
 
 ```markdown
+---
+project: benchmark-a
+version: v3
+run_status: complete
+winner: no clear winner
+parallelism: 3
+run_json: projects/<project-name>/v3/output/run.json
+---
+
 # Benchmark report — <project-name> v<N>
 
 ## Run summary
@@ -291,6 +352,7 @@ skills/<skill-name>/
 
 ## Artifact paths
 
+- `output/run.json`
 - `output/results.jsonl`
 - `output/lanes/`
 - Retained scratch worktrees: `.worktrees/<project-name>-lane-b-v3`  # only when cleanup was skipped
