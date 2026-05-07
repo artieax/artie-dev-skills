@@ -13,6 +13,7 @@ If none of the rows below match, assemble a custom pipeline from [`atoms/`](atom
 | First draft or quick check | `quick` — `static-score` |
 | After any Workflow change | `executor` — `independent-evaluator` + `open-questions-log` + `assumptions-log` + `acceptance-gate` + `assertion-grader` |
 | Want quantitative signals + value proof | `measured` — `executor` + `runtime-telemetry` + `baseline-comparison` |
+| Benchmark / harness / worktree-heavy Workflow | `measured` — runtime cost and with-skill-vs-baseline both matter |
 | After every iteration | `diff` — `static-score` + `regression-diff` |
 | `Do not trigger` changed or before publishing | `boundary` — `adversarial` + `collision-scan` |
 | Pre-merge final gate | `full` — all atoms, strict convergence |

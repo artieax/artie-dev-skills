@@ -1,6 +1,6 @@
 # scaffold — atom-first index
 
-Scaffolding a skill is **picking atoms and combining them**. Every preset (`minimal`, `standard`, `scripts`, `split`) is just a named combination of atoms. Every archetype (`versioned`, `comparator`, `sandbox`) is the same idea with a domain-specific layer.
+Scaffolding a skill is **picking atoms and combining them**. Every preset (`minimal`, `standard`, `scripts`, `benchmark`, `split`) is just a named combination of atoms. Every archetype (`versioned`, `comparator`, `sandbox`) is the same idea with a domain-specific layer.
 
 Start here:
 
@@ -54,6 +54,7 @@ Every preset is `frontmatter + trigger + workflow + redflag + output + requireme
 | [`minimal`](minimal.md) | (none) | ≤ 3 steps, no docs needed |
 | [`standard`](standard.md) | `+ references-dir` | needs supplementary docs or eval tracking |
 | [`scripts`](scripts.md) | `+ references-dir + scripts-dir` | shell or file operations |
+| [`benchmark`](benchmark.md) | `+ references-dir + scripts-dir + versioned-projects` | project-version benchmark harnesses with parallel lanes and per-run markdown winner reports |
 | [`split`](split.md) | `+ orchestrator` + N × `child-skill` | 2+ independent triggers |
 
 If none of these match, build a custom combination — that's what the atom catalog is for.

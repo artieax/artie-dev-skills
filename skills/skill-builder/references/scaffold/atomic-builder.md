@@ -28,7 +28,7 @@ Exemplar mode amplifies what already works in this repo. Catalog mode is the fal
 Build the atom pool atomic-builder will draw from.
 
 **Preset shortcut — skip EXTRACT and PICK entirely:**
-If the user names a preset directly (`minimal`, `standard`, `scripts`, `split`) or if context makes the preset unambiguous, the composition is fully defined in [`index.md`](index.md). Go straight to BUILD. Do **not** read individual `atoms/*.md` files.
+If the user names a preset directly (`minimal`, `standard`, `scripts`, `benchmark`, `split`) or if context makes the preset unambiguous, the composition is fully defined in [`index.md`](index.md). Go straight to BUILD. Do **not** read individual `atoms/*.md` files.
 
 **Catalog mode (default):**
 The pool is defined by the atom catalog table in [`index.md`](index.md). You already have the full catalog — no file reads needed. Only open individual `atoms/<name>.md` files when you need the implementation template of a specific atom not already described by `index.md`.
@@ -51,7 +51,7 @@ Decide which atoms the new skill needs.
 
 **Structural atoms:** add based on the conditions in the [atom catalog](index.md#atom-catalog).
 
-**Shortcut:** if your pick set matches a preset's combination, name the preset instead — `minimal`, `standard`, `scripts`, `split` are all atom combinations.
+**Shortcut:** if your pick set matches a preset's combination, name the preset instead — `minimal`, `standard`, `scripts`, `benchmark`, `split` are all atom combinations.
 
 **Exemplar mode:** narrow the extracted pool to a focused working set (target 5–10 atoms), including `good` atoms to amplify and `bad` atoms to invert.
 
@@ -94,6 +94,16 @@ EXTRACT: skills/bommit/SKILL.md (score 38/50)
 PICK:    frontmatter + trigger + workflow + redflag + output + requirements + references-dir
          + good atoms: bommit's trigger.do_not_trigger, bommit's output.format
 BUILD:   skills/<name>/SKILL.md + references/eval-log.jsonl
+```
+
+### Building a `benchmark` skill with versioned runs
+
+```
+EXTRACT: catalog
+PICK:    frontmatter + trigger + workflow + redflag + output + requirements
+         + references-dir + scripts-dir + versioned-projects
+BUILD:   skills/<name>/SKILL.md + references/ + scripts/ + projects/
+        # each BENCH run writes projects/<name>/v<N>/output/report.md
 ```
 
 ### Building an orchestrator pipeline
