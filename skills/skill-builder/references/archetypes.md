@@ -174,12 +174,24 @@ Ephemeral worktrees are **not** part of the saved artifact tree above. Treat the
 
 ### Run outcomes
 
-- Define `required_lanes` in the preset or `input.md` when not all lanes are mandatory; otherwise, treat all lanes as required
+- Define `required_lanes` in the BENCH run config, preferably as YAML frontmatter in `input.md`; otherwise, treat all lanes as required
 - `complete` = all required lanes produced valid scored results; `no clear winner` is allowed
 - `partial` = at least one lane scored, but one or more required lanes failed or are missing
 - `failed` = no required lane produced a valid scored result
 - `partial` and `failed` runs keep their version folder and report for debugging, but do not advance `current.md`
 ```
+
+Minimal `input.md` frontmatter shape:
+
+```yaml
+---
+project: benchmark-a
+required_lanes: [lane-a, lane-b]
+optional_lanes: [lane-c]
+---
+```
+
+`current.md` points to the latest **complete** run, not necessarily to a run with a single adopted winner. A complete run that ends in `no clear winner` may still advance `current.md`.
 
 ### Parallel worktree lanes
 
@@ -192,6 +204,12 @@ git worktree add --detach .worktrees/<project-name>-<lane>-<run-id> <base-ref>
 
 `<base-ref>` should usually resolve to the repository's default branch once per run, rather than hard-coding `main`. `<run-id>` should be unique per run, such as `v<N>` or a timestamp, so reruns do not collide with retained scratch worktrees.
 
+Terminology:
+
+- `lane` = one comparison arm, such as a strategy, model choice, preset, or code path being compared
+- `runner` / `replica` = one concrete execution slot for a lane
+- If `--parallel <n>` launches replicas, record the lane id and replica id separately rather than collapsing them into one name
+
 Rules:
 
 - Keep the launcher or main working directory untouched; never branch-swap it for a benchmark lane
@@ -202,7 +220,7 @@ Rules:
 - Unless the benchmark explicitly scores git history, do not create commits inside lane worktrees
 - If a benchmark truly needs branch-based lane history, opt in explicitly and include a run-specific suffix in the branch name
 - If cleanup fails because a lane is dirty or otherwise unresolved, keep that worktree, record the path in `report.md`, and skip automatic removal for that lane
-- When `--parallel <n>` is used, create one lane record per runner so the final comparison is reproducible
+- When `--parallel <n>` is used, record one result per runner/replica under its parent lane so the final comparison is reproducible
 
 ### Default sourcing policy
 
@@ -263,8 +281,9 @@ skills/<skill-name>/
 
 ## Source set
 
-- <repo>@<commit-or-tag>
-- <repo>@<commit-or-tag>
+- <repo>@<commit-sha>
+- optional: tag: <tag-name>
+- optional: release: <release-name>
 
 ## Regressions / caveats
 
