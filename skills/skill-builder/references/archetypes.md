@@ -114,6 +114,11 @@ iter/skill-builder-v2
 - The skill produces a single, non-revisable output → use `minimal` or `standard`
 - Versions are already tracked by git commits and no human-readable summary is needed
 
+### When to evolve into `benchmark`
+
+- Script-heavy execution becomes part of the versioned workflow
+- The run needs lane comparison, ranked reporting, or benchmark-style adoption criteria
+
 ---
 
 ## benchmark
@@ -164,12 +169,16 @@ Ephemeral worktrees are **not** part of the saved artifact tree above. Treat the
 
 - Each BENCH run creates a new `projects/<project-name>/v<N>/` folder
 - Every run writes `output/results.jsonl` and `output/report.md`
-- `current.md` moves only when the run is successful under the base `versioned-projects` rule
+- Every run writes `run_status: complete | partial | failed` into `report.md`
+- `current.md` moves only when the run is `complete`
 
 ### Run outcomes
 
-- A run with at least one valid scored lane is successful, even if the report says `no clear winner`
-- If every lane fails, keep the version folder and report for debugging, but do not advance `current.md`
+- Define `required_lanes` in the preset or `input.md` when not all lanes are mandatory; otherwise, treat all lanes as required
+- `complete` = all required lanes produced valid scored results; `no clear winner` is allowed
+- `partial` = at least one lane scored, but one or more required lanes failed or are missing
+- `failed` = no required lane produced a valid scored result
+- `partial` and `failed` runs keep their version folder and report for debugging, but do not advance `current.md`
 ```
 
 ### Parallel worktree lanes
@@ -178,10 +187,10 @@ If a benchmark lane can modify a repository or needs a distinct git state, run e
 
 ```bash
 git fetch <remote> <base-ref>
-git worktree add -b bench/<project-name>-<lane> .worktrees/<project-name>-<lane> <base-ref>
+git worktree add --detach .worktrees/<project-name>-<lane>-<run-id> <base-ref>
 ```
 
-`<base-ref>` should usually resolve to the repository's default branch once per run, rather than hard-coding `main`.
+`<base-ref>` should usually resolve to the repository's default branch once per run, rather than hard-coding `main`. `<run-id>` should be unique per run, such as `v<N>` or a timestamp, so reruns do not collide with retained scratch worktrees.
 
 Rules:
 
@@ -189,9 +198,10 @@ Rules:
 - Run lane-specific setup and benchmark commands inside the lane worktree only
 - Write lane-level scores and artifacts back to `projects/<project-name>/v<N>/output/`
 - Keep ephemeral worktrees outside the versioned `output/` tree so persisted artifacts stay clean
-- Lane branches are throwaway scratch branches by default
+- Detached worktrees are the default because lane state is throwaway scratch state, not a branch-management concern
 - Unless the benchmark explicitly scores git history, do not create commits inside lane worktrees
-- If cleanup fails because a lane is dirty or otherwise unresolved, keep that worktree, record the path in `report.md`, and skip automatic branch deletion for that lane
+- If a benchmark truly needs branch-based lane history, opt in explicitly and include a run-specific suffix in the branch name
+- If cleanup fails because a lane is dirty or otherwise unresolved, keep that worktree, record the path in `report.md`, and skip automatic removal for that lane
 - When `--parallel <n>` is used, create one lane record per runner so the final comparison is reproducible
 
 ### Default sourcing policy
@@ -202,7 +212,8 @@ For public/OSS benchmarks:
 
 - Prefer real OSS sources when they match the target domain
 - Use synthetic fixtures only to fill gaps that public sources do not cover
-- Record the chosen repo URL plus commit, tag, or release in `input.md` so the run is reproducible
+- Record the chosen repo URL plus commit SHA in `input.md` so the run is reproducible
+- Tag or release names are optional secondary context, not a substitute for the commit SHA
 - When multiple materially different OSS candidates exist, compare at least 2 before freezing the benchmark set
 - Explain in `report.md` when a synthetic case was used instead of an OSS source
 
@@ -239,6 +250,7 @@ skills/<skill-name>/
 
 - Archetype: benchmark
 - Parallel lanes: <n>
+- Run status: complete | partial | failed
 - Scoring rubric: <reference>
 - Winner: <lane-id> | no clear winner | all lanes failed
 
@@ -262,6 +274,7 @@ skills/<skill-name>/
 
 - `output/results.jsonl`
 - `output/lanes/`
+- Retained scratch worktrees: `.worktrees/<project-name>-lane-b-v3`  # only when cleanup was skipped
 ```
 
 ### When NOT to use this archetype
