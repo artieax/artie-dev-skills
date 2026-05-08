@@ -51,4 +51,5 @@ Full protocol → `references/<topic>.md`
 ## When to upgrade
 
 - Add `scripts-dir` atom (→ [`scripts`](scripts.md)) when shell or file operations grow > 3 chained commands
+- Adopt the [`benchmark` archetype](../archetypes.md#benchmark) when the skill needs both script-heavy execution and versioned benchmark runs
 - Switch to [`split`](split.md) when two or more references could each have an independent trigger phrase, or when disjoint user personas use only different phases

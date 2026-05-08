@@ -1,6 +1,6 @@
 # scaffold — atom-first index
 
-Scaffolding a skill is **picking atoms and combining them**. Every preset (`minimal`, `standard`, `scripts`, `split`) is just a named combination of atoms. Every archetype (`versioned`, `comparator`, `sandbox`) is the same idea with a domain-specific layer.
+Scaffolding a skill is **picking atoms and combining them**. Every preset (`minimal`, `standard`, `scripts`, `split`) is just a named combination of atoms. Every archetype (`versioned`, `comparator`, `sandbox`, `benchmark`) is the same idea with a domain-specific layer.
 
 Start here:
 
@@ -69,6 +69,7 @@ Archetypes layer additional atoms on top of a preset. Full templates → [`../ar
 | `versioned` | `standard` + `versioned-projects` | iterative outputs, rollback needed |
 | `comparator` | `orchestrator` + 4 × `child-skill` (`-collect` / `-compare` / `-recommend` / `-report`) | comparing libraries / approaches |
 | `sandbox` | `standard` + `sandbox-dir` | want to validate the skill before shipping |
+| `benchmark` | `scripts` + `versioned-projects` | benchmark skills with versioned runs, optional parallel lanes, and per-run markdown reports |
 
 ---
 

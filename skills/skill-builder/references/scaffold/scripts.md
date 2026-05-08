@@ -58,3 +58,8 @@ Expected output: `references/collected.jsonl` with N records.
 - One script per atomic action — `collect.mjs`, `validate.mjs`, not `everything.mjs`
 - Scripts are called from SKILL.md Workflow steps, never standalone
 - Each script starts with a usage comment (see [`atoms/scripts-dir.md`](atoms/scripts-dir.md))
+
+## When to upgrade
+
+- Adopt the [`benchmark` archetype](../archetypes.md#benchmark) when the skill runs repeatable benchmark campaigns or needs `projects/<project-name>/v<N>/` history
+- Switch to [`split`](split.md) when scripts belong to independently triggerable phases rather than one flow

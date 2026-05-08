@@ -114,6 +114,292 @@ iter/skill-builder-v2
 - The skill produces a single, non-revisable output → use `minimal` or `standard`
 - Versions are already tracked by git commits and no human-readable summary is needed
 
+### When to evolve into `benchmark`
+
+- Script-heavy execution becomes part of the versioned workflow
+- The run needs lane comparison, ranked reporting, or benchmark-style adoption criteria
+
+---
+
+## benchmark
+
+**Atom combination:** `scripts` + `versioned-projects`
+
+```
+frontmatter + trigger + workflow + redflag + output + requirements
++ references-dir + scripts-dir + versioned-projects
+```
+
+**Use when:** The skill runs repeatable benchmark campaigns, needs versioned run history, and benefits from a stable markdown report per run. Parallel lanes and public/OSS corpora are common here, but they are part of the benchmark design, not a generic preset contract.
+
+### Directory layout
+
+```
+skills/<skill-name>/
+├── SKILL.md
+├── references/
+│   ├── <rubric>.md
+│   └── eval-log.jsonl
+├── scripts/
+│   ├── bench.mjs
+│   ├── compare.mjs
+│   └── <helper>.mjs
+└── projects/
+    └── <project-name>/
+        ├── v1/
+        │   ├── input.md
+        │   └── output/
+        │       ├── run.json
+        │       ├── lanes/
+        │       │   ├── lane-a/
+        │       │   │   ├── replica-1.json
+        │       │   │   └── replica-2.json
+        │       │   └── lane-b/
+        │       │       └── replica-1.json
+        │       ├── results.jsonl
+        │       └── report.md
+        ├── v2/
+        │   ├── input.md
+        │   └── output/
+        └── current.md
+```
+
+Ephemeral worktrees are **not** part of the saved artifact tree above. Treat them as scratch execution environments under a separate runtime path such as `.worktrees/` or `tmp/worktrees/`, and clean them up after scoring.
+
+### SKILL.md additions
+
+```markdown
+## Benchmark runs
+
+- Each BENCH run creates a new `projects/<project-name>/v<N>/` folder
+- Every run writes `output/run.json`, `output/results.jsonl`, and `output/report.md`
+- `output/run.json` is the canonical machine-readable run summary
+- `report.md` should mirror the key fields from `output/run.json` in YAML frontmatter for human-readable inspection
+- `current.md` moves only when the run is `complete`
+
+### Run outcomes
+
+- Define `lanes` in the BENCH run config, preferably as YAML frontmatter in `input.md`
+- `lanes` is the complete manifest of comparison arms for the run
+- `required_lanes` and `optional_lanes` are both subsets of `lanes`
+- `required_lanes` and `optional_lanes` must be disjoint
+- If neither `required_lanes` nor `optional_lanes` is provided, treat every lane in `lanes` as required
+- If only `required_lanes` is provided, derive `optional_lanes = lanes - required_lanes`
+- If only `optional_lanes` is provided, derive `required_lanes = lanes - optional_lanes`
+- If both are provided, their union must equal `lanes`; otherwise the run config is invalid
+- `complete` = all required lanes produced valid scored results; `no clear winner` is allowed
+- `partial` = at least one lane scored, but one or more required lanes failed or are missing
+- `failed` = no required lane produced a valid scored result
+- `partial` and `failed` runs keep their version folder and report for debugging, but do not advance `current.md`
+- Every `results.jsonl` record must include `lane_id` and `replica_id`
+```
+
+Minimal `input.md` frontmatter shape:
+
+```yaml
+---
+project: benchmark-a
+lanes: [lane-a, lane-b, lane-c]
+required_lanes: [lane-a, lane-b]
+optional_lanes: [lane-c]
+---
+```
+
+`current.md` points to the latest **complete** run, not necessarily to a run with a single adopted winner. A complete run that ends in `no clear winner` may still advance `current.md`.
+
+### Path conventions
+
+All paths stored in `current.md`, `output/run.json`, and `output/report.md` should be **repo-root relative**.
+
+Minimal `current.md` shape:
+
+```yaml
+---
+schema_version: 1
+current_run: v3
+run_status: complete
+winner: no clear winner
+report: projects/<project-name>/v3/output/report.md
+---
+```
+
+### Parallel worktree lanes
+
+If a benchmark lane can modify a repository or needs a distinct git state, run each lane in its own worktree.
+
+```bash
+git fetch <remote> <base-ref>
+git worktree add --detach .worktrees/<project-name>-<lane>-<run-id> <base-ref>
+```
+
+`<base-ref>` should usually resolve to the repository's default branch once per run, rather than hard-coding `main`. `<run-id>` should be unique per run, such as `v<N>` or a timestamp, so reruns do not collide with retained scratch worktrees.
+
+Terminology:
+
+- `lane` = one comparison arm, such as a strategy, model choice, preset, or code path being compared
+- `runner` / `replica` = one concrete execution slot for a lane
+- If `--parallel <n>` launches replicas, record the lane id and replica id separately rather than collapsing them into one name
+
+Rules:
+
+- Keep the launcher or main working directory untouched; never branch-swap it for a benchmark lane
+- Run lane-specific setup and benchmark commands inside the lane worktree only
+- Write lane-level scores and artifacts back to `projects/<project-name>/v<N>/output/`
+- Keep ephemeral worktrees outside the versioned `output/` tree so persisted artifacts stay clean
+- Detached worktrees are the default because lane state is throwaway scratch state, not a branch-management concern
+- Unless the benchmark explicitly scores git history, do not create commits inside lane worktrees
+- If a benchmark truly needs branch-based lane history, opt in explicitly and include a run-specific suffix in the branch name
+- If cleanup fails because a lane is dirty or otherwise unresolved, keep that worktree, record the path in `report.md`, and skip automatic removal for that lane
+- When `--parallel <n>` is used, record one result per runner/replica under its parent lane so the final comparison is reproducible
+
+### Default sourcing policy
+
+When the benchmark is meant to generalize to public code, prefer real OSS repos, issues, PRs, fixtures, and benchmark tasks over synthetic examples. For internal, private, or customer-data benchmarks, use the domain-native corpus instead and document its source constraints in `input.md`.
+
+For public/OSS benchmarks:
+
+- Prefer real OSS sources when they match the target domain
+- Use synthetic fixtures only to fill gaps that public sources do not cover
+- Record the chosen repo URL plus commit SHA in `input.md` so the run is reproducible
+- Tag or release names are optional secondary context, not a substitute for the commit SHA
+- When multiple materially different OSS candidates exist, compare at least 2 before freezing the benchmark set
+- Explain in `report.md` when a synthetic case was used instead of an OSS source
+
+Why:
+
+- OSS tasks usually surface edge cases, conventions, and failure modes that toy tasks miss
+- The resulting rankings tend to predict real-world quality better than hand-written micro-benchmarks
+
+### Example run artifact tree
+
+One completed run should look roughly like this:
+
+```text
+skills/<skill-name>/
+└── projects/
+    └── benchmark-a/
+        ├── current.md
+        └── v3/
+            ├── input.md
+            └── output/
+                ├── run.json
+                ├── lanes/
+                │   ├── lane-a/
+                │   │   ├── replica-1.json
+                │   │   └── replica-2.json
+                │   └── lane-b/
+                │       └── replica-1.json
+                ├── results.jsonl
+                └── report.md
+```
+
+### `run.json` schema
+
+```json
+{
+  "schema_version": 1,
+  "project": "benchmark-a",
+  "version": "v3",
+  "run_status": "complete",
+  "winner": "no clear winner",
+  "lanes": ["lane-a", "lane-b", "lane-c"],
+  "required_lanes": ["lane-a", "lane-b"],
+  "optional_lanes": ["lane-c"],
+  "parallelism": 3,
+  "benchmark_script_version": "bench.mjs@abc1234",
+  "model": {
+    "provider": "openai",
+    "name": "gpt-5",
+    "version": "2026-05-01"
+  },
+  "env_flags": {
+    "seed": 42,
+    "network": "off"
+  },
+  "sources": [
+    {
+      "repo": "owner/repo",
+      "commit_sha": "abcdef1234567890",
+      "tag": "v1.2.3"
+    }
+  ],
+  "artifacts": {
+    "report": "projects/benchmark-a/v3/output/report.md",
+    "results_jsonl": "projects/benchmark-a/v3/output/results.jsonl",
+    "lanes_dir": "projects/benchmark-a/v3/output/lanes/"
+  },
+  "lane_summaries": [
+    {
+      "lane_id": "lane-a",
+      "status": "complete",
+      "replicas_total": 2,
+      "replicas_scored": 2,
+      "artifact_dir": "projects/benchmark-a/v3/output/lanes/lane-a/"
+    },
+    {
+      "lane_id": "lane-b",
+      "status": "partial",
+      "replicas_total": 2,
+      "replicas_scored": 1,
+      "artifact_dir": "projects/benchmark-a/v3/output/lanes/lane-b/"
+    }
+  ]
+}
+```
+
+### `report.md` template
+
+```markdown
+---
+schema_version: 1
+project: benchmark-a
+version: v3
+run_status: complete
+winner: no clear winner
+parallelism: 3
+run_json: projects/<project-name>/v3/output/run.json
+---
+
+# Benchmark report — <project-name> v<N>
+
+## Run summary
+
+- Archetype: benchmark
+- Parallel lanes: <n>
+- Run status: complete | partial | failed
+- Scoring rubric: <reference>
+- Winner: <lane-id> | no clear winner | all lanes failed
+
+## Lane comparison
+
+| Lane | Score | Pass rate | Duration | Cost | Notes |
+|---|---:|---:|---:|---:|---|
+| lane-a | 84 | 0.90 | 132s | 12k tok | strongest overall |
+| lane-b | 79 | 0.85 | 101s | 10k tok | cheaper but missed edge case |
+
+## Source set
+
+- <repo>@<commit-sha>
+- optional: tag: <tag-name>
+- optional: release: <release-name>
+
+## Regressions / caveats
+
+- <risk or tie note>
+
+## Artifact paths
+
+- `projects/<project-name>/v<N>/output/run.json`
+- `projects/<project-name>/v<N>/output/results.jsonl`
+- `projects/<project-name>/v<N>/output/lanes/`
+- Retained scratch worktrees: `.worktrees/<project-name>-lane-b-v3`  # only when cleanup was skipped
+```
+
+### When NOT to use this archetype
+
+- The skill only needs a reusable shell/file workflow, with no benchmark campaign concept → use `scripts`
+- The skill needs versioned outputs but not benchmark comparison, lane scoring, or report ranking → use `versioned`
+
 ---
 
 ## comparator
