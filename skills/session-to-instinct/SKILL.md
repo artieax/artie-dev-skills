@@ -45,6 +45,7 @@ You pick a preset (or list atoms manually), choose an algo per atom (`keyword` /
 | [`evaluator`](atoms/evaluator.md) | candidate instincts from other atoms | scored survivors | filter noise before commit |
 | [`human-curated`](atoms/human-curated.md) | candidates + human review | accepted instincts only | initial rollout, calibration |
 | [`dream-assisted`](atoms/dream-assisted.md) | existing `instincts/*.md` (NOT sessions) | merged / retired entries | periodic pool maintenance |
+| [`ideal-gap`](atoms/ideal-gap.md) | session log — decision points vs. hypothetical superior model | `polarity: bad/never` instinct → `rule` + `doc` | extract capability ceiling deltas; what a better model would have done |
 
 Each atom file documents its inputs, outputs, best-paired algo, and anti-patterns. Read the atom file directly for details.
 
@@ -128,6 +129,7 @@ For each candidate, fill in:
 | `evaluator` | any | inherited from child atom |
 | `human-curated` | any | human selects at review time |
 | `dream-assisted` | any | `[consolidation]` |
+| `ideal-gap` | bad / never | `[rule, doc]` |
 
 If `evaluator` is in the run, candidates pass through it next: it scores precision / coverage / annoyance and drops survivors below `min_confidence` / `min_support_count`.
 

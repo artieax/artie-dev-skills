@@ -1,7 +1,7 @@
 ---
 id: research
 kind: extraction-preset
-atoms: [failure-cluster, success-pattern, head-start, diff-outcome, incident-driven, evaluator, dream-assisted]
+atoms: [failure-cluster, success-pattern, head-start, diff-outcome, incident-driven, ideal-gap, evaluator, dream-assisted]
 emit_targets: [claude-path, agents-md, gemini-md]
 ---
 
@@ -17,6 +17,7 @@ Throws every analytical lens at the session pool. Useful when *exploring* what's
 - [`diff-outcome`](../atoms/diff-outcome.md)
 - [`incident-driven`](../atoms/incident-driven.md)
 - [`evaluator`](../atoms/evaluator.md) — scores all of the above
+- [`ideal-gap`](../atoms/ideal-gap.md) — delta against a hypothetical superior model at each decision point
 - [`dream-assisted`](../atoms/dream-assisted.md) — runs after the others to consolidate
 
 `human-curated` is intentionally NOT enabled — research mode runs unattended.
