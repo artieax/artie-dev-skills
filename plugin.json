@@ -1,12 +1,14 @@
 {
   "name": "artie-dev-skills",
-  "version": "0.2.3",
+  "version": "0.3.0",
   "description": "artie's dev-focused agent skills — plugin-ified workflows for building, shipping, and maintaining software",
   "author": "artieax",
   "repository": "https://github.com/artieax/artie-dev-skills",
   "skills": [
     "pluginize",
     "bommit",
-    "skill-builder"
+    "skill-builder",
+    "session-to-instinct",
+    "instinct-to-harness"
   ]
 }
