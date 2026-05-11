@@ -49,6 +49,8 @@ Decide which atoms the new skill needs.
 
 **Required atoms:** every skill needs the six content atoms (`frontmatter` + `trigger` + `workflow` + `redflag` + `output` + `requirements`).
 
+**Optional content atoms:** add based on the conditions in the [atom catalog](index.md#atom-catalog). For example, include `variables` when the skill has repeated user inputs, template placeholders, derived paths, or a skill-creation workflow.
+
 **Structural atoms:** add based on the conditions in the [atom catalog](index.md#atom-catalog).
 
 **Shortcut:** if your pick set matches a preset or archetype, name it instead — `minimal`, `standard`, `scripts`, `split`, `versioned`, `comparator`, `sandbox`, and `benchmark` are all predefined combinations.

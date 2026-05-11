@@ -63,3 +63,81 @@ Use these ASCII blocks when reporting progress to the user. Adjust paths and sco
   Detected: new-skill -.-> bommit  (line 45)
   Add to dependency-graph.md? [Y/n]
 ```
+
+---
+
+## PR description
+
+Use a normal product-engineering summary. Describe the change and validation,
+not which model, agent, or delegation route produced it.
+
+Title:
+
+```
+Add variables scaffold atom
+```
+
+Title rules:
+
+- Use a plain product title.
+- Do not prefix titles with tool or agent labels such as `[codex]`, `[claude]`,
+  `[chatgpt]`, or `[bot]`.
+- Keep automation provenance out of the title unless the PR changes that
+  automation directly.
+
+```markdown
+## Summary
+
+- <what changed>
+- <what changed>
+
+## Why
+
+<why the change is useful>
+
+## Validation
+
+- `<command>`
+- `<command>`
+```
+
+Rules:
+
+- Do not mention reviewer/model/tool provenance such as ChatGPT, Claude, Codex,
+  token-shield, or browser delegation unless the tool itself is the subject of
+  the PR.
+- If an external review route was unavailable, report that to the user in the
+  final response, not in the PR description.
+- Keep failed validation in the PR only when it materially affects merge risk.
+
+---
+
+## PR review comment
+
+Use findings-first review language. If there are no findings, say so directly
+and keep the comment about the diff.
+
+```markdown
+## Review
+
+No findings.
+
+Checked:
+
+- <area 1>
+- <area 2>
+- <area 3>
+
+Validation:
+
+- `<command>`
+```
+
+Rules:
+
+- Do not describe the review as "ChatGPT review", "Codex review", or any other
+  tool-branded review in the PR comment.
+- Put tool limitations, fallback routes, clipboard prompts, and manual handoff
+  notes in the user-facing final response only.
+- Prefer `Summary`, `Review`, `Checked`, `Validation`, and `Residual risk`
+  headings over process narration.

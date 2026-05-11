@@ -15,7 +15,7 @@ Start here:
 
 ## Atom catalog
 
-### Content atoms (sections inside `SKILL.md`)
+### Required content atoms (sections inside `SKILL.md`)
 
 | Atom | Purpose | Required? |
 |---|---|---|
@@ -25,6 +25,12 @@ Start here:
 | [`redflag`](atoms/redflag.md) | `Always` / `Never` lists | always |
 | [`output`](atoms/output.md) | Concrete deliverable shape | always |
 | [`requirements`](atoms/requirements.md) | Checklist with RFC 2119 (`MUST` / `SHOULD` / `MAY`) priorities | always |
+
+### Optional content atoms
+
+| Atom | Purpose | When to add |
+|---|---|---|
+| [`variables`](atoms/variables.md) | `## Variables` section for user inputs, derived values, placeholders, and output paths | 3+ user inputs, prompt/template rendering, scripts with mirrored flags, or skill-creation workflows |
 
 ### Structural atoms (directories alongside `SKILL.md`)
 
@@ -47,7 +53,7 @@ Start here:
 
 ## Presets — named atom combinations
 
-Every preset is `frontmatter + trigger + workflow + redflag + output + requirements` (the six required content atoms) plus the structural atoms listed below.
+Every preset is `frontmatter + trigger + workflow + redflag + output + requirements` (the six required content atoms) plus the structural atoms listed below. Optional content atoms such as `variables` can be added to any preset without changing the preset name; note them as `minimal + variables`, `standard + variables`, and so on.
 
 | Preset | Atoms added on top of the six required | Use when |
 |---|---|---|
