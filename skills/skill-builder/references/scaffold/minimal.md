@@ -1,6 +1,8 @@
 # preset: minimal
 
-`minimal` = the six required content atoms only.
+`minimal` = the six required content atoms only. Optional content atoms can be
+layered on top without changing the structural preset name, for example
+`minimal + variables`.
 
 ```
 frontmatter + trigger + workflow + redflag + output + requirements
@@ -103,3 +105,7 @@ Add the `references-dir` atom (→ [`standard`](standard.md)) when:
 - The Workflow section exceeds ~40 lines
 - You need an `eval-log.jsonl` for tracking iterations
 - Protocol details would clutter the main SKILL.md
+
+Add the [`variables`](atoms/variables.md) atom when the skill asks for multiple
+user inputs, renders prompt/template placeholders, derives output paths, or
+creates other skills from user-provided fields.

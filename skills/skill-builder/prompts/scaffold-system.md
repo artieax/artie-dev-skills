@@ -16,3 +16,4 @@ A good SKILL.md must:
 5. Include ## Requirements with RFC 2119 priorities (`MUST` / `SHOULD` / `MAY`) — at least one item must be `MUST`
 6. Be self-contained — no undefined references to external docs
 7. Be written entirely in English
+8. Include `## Variables` when requirements mention user inputs, reusable values, prompt/template placeholders, scripts with flags, derived paths, or skill creation from named fields
