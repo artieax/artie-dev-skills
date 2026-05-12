@@ -54,6 +54,9 @@ in under a few seconds. Catches the regressions that broke past iterations:
      both, freezing strictly worse skills as "done".
  13. optimize._coerce_metric and _score_from_dict handle non-numeric
      inputs correctly.
+ 14. references/scaffold/index.md atom links resolve to atom template files,
+     every scaffold atom template is listed in the catalog, and catalog names
+     match each atom file's `# atom: <name>` header.
 
 Exit non-zero on any failure with a clear marker message. Stdlib only.
 
@@ -1184,6 +1187,71 @@ def check_dependency_graph(skill_root: Path) -> list[str]:
     return failures
 
 
+_SCAFFOLD_ATOM_LINK_RE = re.compile(r"\[`([^`]+)`\]\(atoms/([a-z0-9-]+\.md)\)")
+
+
+def check_scaffold_atom_catalog(skill_root: Path) -> list[str]:
+    """Ensure scaffold atom catalog links and atom template files stay in sync."""
+    failures: list[str] = []
+    scaffold_dir = skill_root / "references" / "scaffold"
+    index_path = scaffold_dir / "index.md"
+    atoms_dir = scaffold_dir / "atoms"
+
+    if not index_path.exists():
+        return [f"scaffold index not found at {index_path}"]
+    if not atoms_dir.exists():
+        return [f"scaffold atoms dir not found at {atoms_dir}"]
+
+    text = index_path.read_text(encoding="utf-8")
+    linked: dict[str, str] = {}
+    for match in _SCAFFOLD_ATOM_LINK_RE.finditer(text):
+        atom_name = match.group(1)
+        file_name = match.group(2)
+        expected_file = f"{atom_name}.md"
+        if file_name != expected_file:
+            failures.append(
+                f"scaffold/index.md atom link mismatch: label {atom_name!r} "
+                f"points at {file_name!r}, expected {expected_file!r}"
+            )
+        linked[file_name] = atom_name
+
+    linked_files = set(linked)
+    actual_files = {
+        path.name
+        for path in atoms_dir.glob("*.md")
+        if path.is_file()
+    }
+
+    missing_files = linked_files - actual_files
+    unlisted_files = actual_files - linked_files
+
+    if missing_files:
+        failures.append(
+            "scaffold/index.md links to missing atom file(s): "
+            f"{sorted(missing_files)}"
+        )
+    if unlisted_files:
+        failures.append(
+            "scaffold atom file(s) missing from catalog table: "
+            f"{sorted(unlisted_files)}"
+        )
+
+    for file_name, atom_name in sorted(linked.items()):
+        path = atoms_dir / file_name
+        if not path.exists():
+            continue
+        first_line = path.read_text(encoding="utf-8").splitlines()[0:1]
+        expected_header = f"# atom: {atom_name}"
+        if not first_line or first_line[0].strip() != expected_header:
+            failures.append(
+                f"{path.relative_to(skill_root)} header mismatch: "
+                f"expected {expected_header!r}, got "
+                f"{first_line[0].strip() if first_line else '<empty>'!r}"
+            )
+
+    return failures
+
+
 def check_collect_evals_fixture(skill_root: Path) -> list[str]:
     """
     Stage a tiny synthetic skill root (SKILL.md + one v<N>/eval.json with
@@ -1417,6 +1485,7 @@ def main() -> int:
         ("optimize_description_estimate_cache", check_optimize_description_estimate_cache),
         ("tune_thresholds_regression_guard", check_tune_thresholds_regression_guard),
         ("dependency_graph", check_dependency_graph),
+        ("scaffold_atom_catalog", check_scaffold_atom_catalog),
         ("collect_evals_fixture", check_collect_evals_fixture),
         ("collect_evals_footgun", check_collect_evals_footgun),
     ):

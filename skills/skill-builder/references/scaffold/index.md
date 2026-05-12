@@ -40,10 +40,12 @@ Start here:
 | [`scripts-dir`](atoms/scripts-dir.md) | `scripts/` for encapsulated shell/file ops | > 3 chained commands or reusable logic |
 | [`stdout-delegate`](atoms/stdout-delegate.md) | Scripts emit `__LLM_DELEGATE__:` lines; host executes LLM calls — no API key or `claude` CLI needed inside the script | scripts need selective LLM help but can't import a SDK |
 | [`prompts-dir`](atoms/prompts-dir.md) | `prompts/` for reusable LLM prompts loaded by scripts | scripts make 2+ LLM calls, or prompts are large enough to obscure call-site code |
+| [`meilisearch-index`](atoms/meilisearch-index.md) | Local Meilisearch index + query CLI for skill-owned records | skill stores 50+ searchable records, needs fuzzy text search, facets, or LLM context trimming |
 | [`atomic-builder`](atoms/atomic-builder.md) | EXTRACT → PICK → BUILD pipeline owned by this skill | skill's core job is generating artifacts from a catalog of parts |
 | [`orchestrator`](atoms/orchestrator.md) | SKILL.md that calls top-level child skills in fixed order | multi-phase pipeline with independent triggers |
 | [`match-router`](atoms/match-router.md) | Dispatch that auto-picks a sub-skill when intent is clear, asks when ambiguous | orchestrator with 2+ candidates where the right one depends on intent |
 | [`child-skill`](atoms/child-skill.md) | Independent top-level skill called by an orchestrator | always paired with `orchestrator` or `match-router` |
+| [`nested-sub-skill`](atoms/nested-sub-skill.md) | Parent-scoped child skill under `skills/<parent>/skills/<child>/` | internal phase should not appear as a top-level skill |
 | [`list-registry`](atoms/list-registry.md) | `references/<domain>-list.md` — curated candidate list read by comparator/orchestrator, auto-expanded via skill-auto-tuner | skill compares a domain with a growing candidate set |
 | [`versioned-projects`](atoms/versioned-projects.md) | `projects/<name>/v<N>/` for iterated outputs | outputs evolve over time, rollback needed |
 | [`sandbox-dir`](atoms/sandbox-dir.md) | `sandbox/{fixtures,runs}/` for self-validation | want to verify the skill before merging |
@@ -54,6 +56,8 @@ Start here:
 ## Presets — named atom combinations
 
 Every preset is `frontmatter + trigger + workflow + redflag + output + requirements` (the six required content atoms) plus the structural atoms listed below. Optional content atoms such as `variables` can be added to any preset without changing the preset name; note them as `minimal + variables`, `standard + variables`, and so on.
+
+Optional structural add-ons can also be composed with a preset when the condition is specific to the skill. For example, use `scripts + meilisearch-index` when a scripted skill owns a searchable record corpus.
 
 | Preset | Atoms added on top of the six required | Use when |
 |---|---|---|
